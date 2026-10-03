@@ -1,0 +1,535 @@
+"""
+personal_brand/post_generator.py
+--------------------------------
+Personal Brand Content Generator for Lakshya.
+Generates:
+1. One high-quality LinkedIn post
+2. One 7-slide carousel content spec (consumed by carousel_builder.py)
+3. Three distinct X posts (interesting, contrarian, builder takeaway)
+
+Reuses OpenRouter/Gemini API callers if credentials exist, supports mock provider
+for testing, enforces anti-AI-slop rules, source integrity, and deduplication logging.
+"""
+
+from pathlib import Path
+import json
+import os
+import re
+import urllib.request
+import ssl
+import datetime
+from typing import Dict, Any, List, Optional, Tuple, Callable
+
+from .deduplication import PersonalBrandLog
+from .research import load_env_file
+
+SSL_CTX = ssl.create_default_context()
+SSL_CTX.check_hostname = False
+SSL_CTX.verify_mode = ssl.CERT_NONE
+
+# Banned Anti-AI-Slop Words & Phrases
+BANNED_SLOP = [
+    "game changer", "game-changer", "revolutionary", "unlock", "leverage",
+    "leverages", "10x", "future of work", "delve", "tapestry", "disruptive",
+    "paradigm shift", "supercharge", "excited to share", "thought leader",
+    "groundbreaking", "unprecedented", "synergy", "unleash", "transformative",
+    "world-class", "journey", "ecosystem"
+]
+
+
+FREE_MODELS: Dict[str, List[str]] = {
+    "openrouter": [
+        "liquid/lfm-2.5-2.6b:free",
+        "dots-studio/dots-3-note-preview:free",
+        "cohere/north-mini-code:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "openrouter/free"
+    ],
+    "groq": ["llama-3.3-70b-versatile", "llama3-8b-8192"],
+    "gemini": ["gemini-1.5-flash", "gemini-2.0-flash"],
+    "anthropic": []  # Anthropic is paid-only, blocked in free_only mode
+}
+
+
+class LLMProvider:
+    """
+    Abstraction for LLM API calls with security credential masking,
+    cost safety checks (FREE_ONLY mode), and graceful provider fallback.
+    """
+
+    def __init__(
+        self,
+        custom_caller: Optional[Callable[[str, str], str]] = None,
+        free_only: Optional[bool] = None
+    ):
+        self.custom_caller = custom_caller
+        self.env_vars = load_env_file()
+        
+        # Determine free_only setting (default True if unset)
+        if free_only is not None:
+            self.free_only = free_only
+        else:
+            raw_fo = os.environ.get("LLM_FREE_ONLY") or os.environ.get("FREE_ONLY") or self.env_vars.get("LLM_FREE_ONLY", "true")
+            self.free_only = str(raw_fo).lower() in ("true", "1", "yes", "y")
+
+        self.available_providers = self._detect_providers()
+        self.provider_name = self.available_providers[0] if self.available_providers else "none"
+
+    def _get_key(self, key_name: str) -> Optional[str]:
+        return os.environ.get(key_name) or self.env_vars.get(key_name)
+
+    def _detect_providers(self) -> List[str]:
+        if self.custom_caller is not None:
+            return ["custom_mock"]
+        
+        providers = []
+        if self._get_key("OPENROUTER_API_KEY"):
+            providers.append("openrouter")
+        if self._get_key("GROQ_API_KEY"):
+            providers.append("groq")
+        if self._get_key("GEMINI_API_KEY"):
+            providers.append("gemini")
+        if self._get_key("ANTHROPIC_TOKEN"):
+            if not self.free_only:
+                providers.append("anthropic")
+
+        return providers
+
+    def is_configured(self) -> bool:
+        return len(self.available_providers) > 0
+
+    def get_masked_status(self) -> Dict[str, Any]:
+        """Returns provider configuration status with all credentials strictly masked."""
+        return {
+            "OPENROUTER_API_KEY": "configured" if bool(self._get_key("OPENROUTER_API_KEY")) else "not_configured",
+            "GROQ_API_KEY": "configured" if bool(self._get_key("GROQ_API_KEY")) else "not_configured",
+            "GEMINI_API_KEY": "configured" if bool(self._get_key("GEMINI_API_KEY")) else "not_configured",
+            "ANTHROPIC_TOKEN": "configured" if bool(self._get_key("ANTHROPIC_TOKEN")) else "not_configured",
+            "free_only_mode": self.free_only,
+            "active_providers": self.available_providers
+        }
+
+    def __repr__(self) -> str:
+        return f"LLMProvider(free_only={self.free_only}, providers={self.available_providers})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def generate(self, system_prompt: str, user_prompt: str) -> str:
+        if self.custom_caller:
+            return self.custom_caller(system_prompt, user_prompt)
+
+        if not self.is_configured():
+            if self.free_only:
+                raise RuntimeError(
+                    "No free LLM provider credentials found or allowed under LLM_FREE_ONLY=true. "
+                    "Please configure OPENROUTER_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY."
+                )
+            else:
+                raise RuntimeError(
+                    "No valid LLM provider credentials found. "
+                    "Please configure OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, or ANTHROPIC_TOKEN."
+                )
+
+        errors = []
+        for provider in self.available_providers:
+            try:
+                if provider == "openrouter":
+                    return self._call_openrouter(system_prompt, user_prompt)
+                elif provider == "groq":
+                    return self._call_groq(system_prompt, user_prompt)
+                elif provider == "gemini":
+                    return self._call_gemini(system_prompt, user_prompt)
+                elif provider == "anthropic":
+                    return self._call_anthropic(system_prompt, user_prompt)
+            except Exception as e:
+                # Sanitize error message so no API key or token is exposed in output
+                err_str = str(e)
+                for k in ["OPENROUTER_API_KEY", "GROQ_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_TOKEN"]:
+                    val = self._get_key(k)
+                    if val and len(val) > 4:
+                        err_str = err_str.replace(val, "[MASKED_KEY]")
+                err_msg = f"Provider '{provider}' call failed: {err_str}"
+                print(f"[WARN] {err_msg}. Falling back to next available provider...")
+                errors.append(err_msg)
+
+        raise RuntimeError(f"All configured LLM providers failed:\n" + "\n".join(errors))
+
+    def _call_openrouter(self, system_prompt: str, user_prompt: str) -> str:
+        api_key = self._get_key("OPENROUTER_API_KEY")
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        models = FREE_MODELS["openrouter"] if self.free_only else ["google/gemma-4-31b-it:free", "anthropic/claude-3.5-sonnet"]
+
+        last_err = None
+        for m in models:
+            if self.free_only and not m.endswith(":free") and m != "openrouter/free":
+                continue
+            for use_json_format in [True, False]:
+                payload = {
+                    "model": m,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "max_tokens": 4000
+                }
+                if use_json_format:
+                    payload["response_format"] = {"type": "json_object"}
+
+                try:
+                    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+                    with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
+                        resp = json.loads(res.read().decode("utf-8"))
+                        if resp and "choices" in resp and len(resp["choices"]) > 0:
+                            content = resp["choices"][0]["message"]["content"]
+                            if content:
+                                return content
+                except Exception as e:
+                    last_err = e
+                    continue
+
+        raise RuntimeError(f"OpenRouter models failed. Last error: {last_err}")
+
+    def _call_groq(self, system_prompt: str, user_prompt: str) -> str:
+        api_key = self._get_key("GROQ_API_KEY")
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        models = FREE_MODELS["groq"]
+        last_err = None
+
+        for m in models:
+            payload = {
+                "model": m,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                "max_tokens": 4000,
+                "response_format": {"type": "json_object"}
+            }
+            try:
+                req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+                with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
+                    resp = json.loads(res.read().decode("utf-8"))
+                    if resp and "choices" in resp and len(resp["choices"]) > 0:
+                        return resp["choices"][0]["message"]["content"]
+            except Exception as e:
+                last_err = e
+                continue
+
+        raise RuntimeError(f"Groq models failed. Last error: {last_err}")
+
+    def _call_gemini(self, system_prompt: str, user_prompt: str) -> str:
+        api_key = self._get_key("GEMINI_API_KEY")
+        models = FREE_MODELS["gemini"]
+        last_err = None
+
+        for m in models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "contents": [{
+                    "parts": [{"text": f"{system_prompt}\n\nUSER REQUEST:\n{user_prompt}"}]
+                }],
+                "generationConfig": {"response_mime_type": "application/json"}
+            }
+            try:
+                req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+                with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
+                    resp = json.loads(res.read().decode("utf-8"))
+                    if resp and "candidates" in resp and len(resp["candidates"]) > 0:
+                        return resp["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception as e:
+                last_err = e
+                continue
+
+        raise RuntimeError(f"Gemini models failed. Last error: {last_err}")
+
+    def _call_anthropic(self, system_prompt: str, user_prompt: str) -> str:
+        if self.free_only:
+            raise RuntimeError("Anthropic provider is a paid-only service and is blocked under LLM_FREE_ONLY=true.")
+
+        token = self._get_key("ANTHROPIC_TOKEN")
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": token,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "claude-3-5-sonnet-20241022",
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": user_prompt}],
+            "max_tokens": 4000
+        }
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
+            resp = json.loads(res.read().decode("utf-8"))
+            return resp["content"][0]["text"]
+
+
+def validate_content_package(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """Quality control validation for generated content package."""
+    errors = []
+
+    # Check top level
+    for k in ["date", "topic", "thesis", "linkedin", "carousel", "x_posts"]:
+        if k not in data or not data[k]:
+            errors.append(f"Missing top-level key: {k}")
+
+    if errors:
+        return False, errors
+
+    # Check LinkedIn post
+    linkedin = data.get("linkedin", {})
+    caption = linkedin.get("caption", "")
+    if not caption or len(caption) < 100:
+        errors.append("LinkedIn caption is missing or too short (<100 chars).")
+
+    # Check Carousel Spec (Must match carousel_builder.py requirements)
+    carousel = data.get("carousel", {})
+    req_c_keys = ["hook", "context", "misunderstanding", "evidence", "why_it_matters", "builder_takeaway", "final_insight"]
+    for ck in req_c_keys:
+        if ck not in carousel or not carousel[ck]:
+            errors.append(f"Carousel missing required field: {ck}")
+
+    # Check X Posts (Exactly 3 posts with distinct angles)
+    x_posts = data.get("x_posts", [])
+    if not isinstance(x_posts, list) or len(x_posts) != 3:
+        errors.append(f"x_posts must be a list of exactly 3 items, got {len(x_posts) if isinstance(x_posts, list) else 0}.")
+    else:
+        angles = [p.get("angle", "").lower() for p in x_posts if isinstance(p, dict)]
+        if len(set(angles)) < 3:
+            errors.append(f"X posts must have 3 distinct angles, got: {angles}")
+        for idx, xp in enumerate(x_posts):
+            text = xp.get("text", "") if isinstance(xp, dict) else ""
+            if not text or len(text) > 300:
+                errors.append(f"X post #{idx+1} text missing or exceeds 300 chars.")
+
+    # Check Founders Wing anti-patterns
+    raw_str = json.dumps(data).lower()
+    if "founders wing" in raw_str or "founderswing" in raw_str or "prithal" in raw_str:
+        errors.append("Content contains Founders Wing references.")
+
+    # Check Anti-AI-Slop words
+    found_slop = [w for w in BANNED_SLOP if w in raw_str]
+    if found_slop:
+        errors.append(f"Content contains banned AI slop words: {found_slop}")
+
+    return len(errors) == 0, errors
+
+
+class PostGenerator:
+    """Generates 1 LinkedIn post, 1 Carousel spec, and 3 X posts from research candidate."""
+
+    def __init__(
+        self,
+        provider: Optional[LLMProvider] = None,
+        dedup_log: Optional[PersonalBrandLog] = None
+    ):
+        self.provider = provider or LLMProvider()
+        self.dedup_log = dedup_log or PersonalBrandLog()
+
+    def generate_content_package(self, research_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Generates, validates, and logs personal-brand content package."""
+        topic = research_data.get("topic", "")
+        thesis = research_data.get("thesis", "")
+        date_str = research_data.get("date") or datetime.date.today().isoformat()
+
+        # Check deduplication prior to generation
+        is_dup, prev_entry, _ = self.dedup_log.is_topic_similar(topic)
+        if is_dup:
+            raise ValueError(f"Topic '{topic}' is too similar to recent entry from {prev_entry.get('date')}: '{prev_entry.get('topic')}'")
+
+        system_prompt = """
+You are the primary copywriter for Lakshya's personal brand.
+Lakshya is a young builder learning about technology, writing for software developers, founders, tech builders, and ambitious generalists. He researches, explains, and shares what he finds interesting — he does NOT lecture from authority.
+
+Your goal is to write 1 LinkedIn post, 1 7-slide Carousel specification, and 3 X/Twitter posts based STRICTLY on the provided research.
+
+BANNED WORDS (STRICTLY FORBIDDEN - NEVER USE ANY OF THESE WORDS):
+"game changer", "game-changer", "revolutionary", "unlock", "leverage", "leverages", "10x", "future of work", "delve", "tapestry", "disruptive", "paradigm shift", "supercharge", "excited to share", "thought leader", "groundbreaking", "unprecedented", "synergy", "unleash", "transformative", "world-class", "journey", "ecosystem".
+
+CRITICAL SOURCE RULES:
+1. Read the source carefully. If it is a PRE-EVENT ANNOUNCEMENT (e.g. speaker lineup, agenda preview, upcoming panel), do NOT write as if the event already happened. Use future tense: "will explore", "is set to discuss". NEVER say "highlighted", "revealed", "shared" if the talk hasn't happened yet.
+2. Only make factual claims that are DIRECTLY stated in the source material. Do NOT infer, extrapolate, or fabricate details not in the source.
+3. If the source mentions specific numbers, dollar amounts, partnerships, or milestones, USE THEM. They make content credible.
+4. Do NOT fabricate quotes. If the final_insight quote is not from a real person, do NOT wrap it in quotation marks. Present it as a plain takeaway statement.
+
+LINKEDIN POST RULES:
+1. The caption MUST start with a strong hook line (question, surprising fact, or bold claim) that stops the scroll.
+2. Format with SHORT paragraphs separated by blank lines (use \n\n). Never write a single wall-of-text paragraph.
+3. Include at least one specific data point or fact from the source (a number, a dollar amount, a date, a company name with context).
+4. Write in first person where natural: "I was reading about...", "What caught my attention...", "Here's what I think matters for builders..."
+5. End with a specific, engaging CTA question — not generic like "What do you think?".
+6. Tone: Curious builder sharing what he learned, NOT a corporate press release.
+
+X POST RULES:
+1. Each post MUST be a genuinely distinct thought — NOT a shortened version of the LinkedIn post.
+2. The INTERESTING post should surface one specific surprising detail or number from the source.
+3. The CONTRARIAN post must present a genuinely non-obvious take that would make someone pause. "Bigger isn't always better" is NOT contrarian.
+4. The BUILDER post must give one concrete, specific action — not a platitude.
+5. Each post should work as a standalone thought that doesn't need the LinkedIn post for context.
+
+CAROUSEL RULES:
+1. The evidence.stat field MUST be a short number or metric (e.g. "$5.5B", "750 MW", "84%", "10x"). It is rendered at 110px font size, so it MUST be very short (under 8 characters ideally, never more than 15). NEVER put a full sentence in stat.
+2. The evidence.explanation field is where you put the context sentence explaining the stat.
+3. Each slide must advance the argument — no repeating the same idea across slides.
+4. The final_insight.quote should be a memorable takeaway (NOT in quotation marks unless it's a real quote from a named person).
+
+GENERAL RULES:
+1. Tone: Intelligent, concise, research-backed, practical, conversational, peer builder level.
+2. NO fake personal achievements, NO fake startup metrics, NO fake customer/revenue claims.
+3. Strictly ground factual claims in the supplied research sources.
+4. NO Founders Wing references.
+
+OUTPUT FORMAT:
+Return ONLY valid JSON matching this exact structure:
+{
+  "date": "YYYY-MM-DD",
+  "topic": "...",
+  "thesis": "...",
+  "category": "AI & Software",
+  "linkedin": {
+    "caption": "Full LinkedIn post text with \\n\\n between paragraphs. Start with hook. Include specific data. End with CTA.",
+    "sources": [{"title": "...", "url": "..."}]
+  },
+  "carousel": {
+    "date": "YYYY-MM-DD",
+    "topic": "...",
+    "category": "AI & Software",
+    "thesis": "...",
+    "hook": {"headline": "...", "subtitle": "..."},
+    "context": {"headline": "...", "points": ["...", "...", "..."]},
+    "misunderstanding": {"myth": "...", "reality": "..."},
+    "evidence": {"stat": "SHORT NUMBER OR METRIC ONLY (e.g. $5.5B, 750MW, 84%)", "label": "...", "explanation": "..."},
+    "why_it_matters": {"headline": "...", "implications": [{"target": "...", "desc": "..."}, ...]},
+    "builder_takeaway": {"headline": "...", "actions": ["...", "...", "..."]},
+    "final_insight": {"quote": "A memorable takeaway line (no quotation marks unless real quote from named person)", "cta": "Follow for practical AI + startup breakdowns."},
+    "sources": [{"title": "...", "url": "..."}]
+  },
+  "x_posts": [
+    {
+      "angle": "interesting",
+      "text": "One specific surprising detail from the source (max 280 chars)",
+      "sources": []
+    },
+    {
+      "angle": "contrarian",
+      "text": "A genuinely non-obvious, debatable take (max 280 chars)",
+      "sources": []
+    },
+    {
+      "angle": "builder",
+      "text": "One concrete, specific builder action (max 280 chars)",
+      "sources": []
+    }
+  ]
+}
+"""
+
+        user_prompt = f"""
+RESEARCH INPUT DATA:
+Date: {date_str}
+Topic: {topic}
+Why Now: {research_data.get('why_now', '')}
+Potential Angle: {research_data.get('potential_angle', '')}
+Thesis: {thesis}
+Category: {research_data.get('category', 'AI & Software')}
+Sources: {json.dumps(research_data.get('sources', []))}
+
+IMPORTANT REMINDERS:
+- Check if the source is a pre-event announcement or a post-event report. Frame tense accordingly.
+- The carousel evidence.stat MUST be a short number/metric (under 15 chars), NOT a sentence.
+- LinkedIn post MUST have multiple paragraphs (use \\n\\n), NOT one blob.
+- Each X post must be a distinct standalone thought.
+- Use specific numbers and facts from the source, not abstract generalities.
+
+Generate the complete JSON package now.
+"""
+
+        last_errors = []
+        for attempt in range(3):
+            raw_response = self.provider.generate(system_prompt, user_prompt)
+            
+            clean_json = raw_response.strip()
+            if clean_json.startswith("```"):
+                clean_json = re.sub(r"^```(?:json)?", "", clean_json)
+                clean_json = re.sub(r"```$", "", clean_json).strip()
+
+            try:
+                data = json.loads(clean_json)
+            except Exception as e:
+                last_errors = [f"LLM returned invalid JSON: {e}"]
+                continue
+
+            data["date"] = date_str
+
+            valid, errors = validate_content_package(data)
+            if valid:
+                self.dedup_log.add_entry(
+                    topic=topic,
+                    angle=research_data.get("potential_angle", ""),
+                    thesis=thesis,
+                    linkedin_hook=data["carousel"]["hook"].get("headline", ""),
+                    x_themes=[p["angle"] for p in data["x_posts"]],
+                    sources=research_data.get("sources", []),
+                    date_str=date_str
+                )
+                return data
+
+            last_errors = errors
+            user_prompt += f"\n\nPREVIOUS GENERATION ATTEMPT FAILED QUALITY CONTROL:\n{errors}\nPlease fix these issues and regenerate without any banned words."
+
+        raise ValueError(f"Content package failed editorial quality validation after 3 attempts: {last_errors}")
+
+    def save_content_artifacts(self, package: Dict[str, Any]) -> Dict[str, Path]:
+        """Saves generated content into structured directories content/linkedin/, content/x/, content/."""
+        date_str = package.get("date") or datetime.date.today().isoformat()
+        root_dir = Path(__file__).resolve().parent.parent
+
+        linkedin_dir = root_dir / "content" / "linkedin" / date_str
+        x_dir = root_dir / "content" / "x" / date_str
+        daily_dir = root_dir / "content" / date_str
+
+        linkedin_dir.mkdir(parents=True, exist_ok=True)
+        x_dir.mkdir(parents=True, exist_ok=True)
+        daily_dir.mkdir(parents=True, exist_ok=True)
+
+        li_file = linkedin_dir / "linkedin_post.md"
+        with open(li_file, "w", encoding="utf-8") as f:
+            f.write(f"# LinkedIn Post — {date_str}\n\n")
+            f.write(f"**Topic:** {package['topic']}\n\n")
+            f.write("---\n\n")
+            f.write(package["linkedin"]["caption"])
+
+        x_json_file = x_dir / "x_posts.json"
+        with open(x_json_file, "w", encoding="utf-8") as f:
+            json.dump(package["x_posts"], f, indent=2, ensure_ascii=False)
+
+        x_md_file = x_dir / "x_posts.md"
+        with open(x_md_file, "w", encoding="utf-8") as f:
+            f.write(f"# X / Twitter Posts — {date_str}\n\n")
+            for idx, xp in enumerate(package["x_posts"], 1):
+                f.write(f"### Post {idx} ({xp['angle'].upper()})\n\n")
+                f.write(f"{xp['text']}\n\n")
+                f.write("---\n\n")
+
+        package_file = daily_dir / "daily_content_package.json"
+        with open(package_file, "w", encoding="utf-8") as f:
+            json.dump(package, f, indent=2, ensure_ascii=False)
+
+        return {
+            "linkedin_md": li_file,
+            "x_json": x_json_file,
+            "x_md": x_md_file,
+            "package_json": package_file
+        }

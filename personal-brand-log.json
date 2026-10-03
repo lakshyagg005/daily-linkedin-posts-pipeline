@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "date": "2026-09-30",
+      "topic": "Why Software Distribution Beats Building Simple AI Wrappers",
+      "angle": "Distribution and deep workflow integration form real moats, not model wrapper APIs.",
+      "thesis": "AI capabilities are commoditizing quickly; owning the user workflow and distribution is the true defensible asset.",
+      "linkedin_hook": "Why Your AI Wrapper Might Not Last",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "TechCrunch AI Analysis",
+          "url": "https://techcrunch.com/category/artificial-intelligence/",
+          "source_type": "high_quality_journalism"
+        }
+      ]
+    },
+    {
+      "date": "2026-09-30",
+      "topic": "Cerebras Systems’ Andrew Feldman on whether AI can keep scaling at TechCrunch Disrupt 2026",
+      "angle": "Impact of this technical shift on software builders and product strategy.",
+      "thesis": "At TechCrunch Disrupt 2026, Cerebras Systems CEO and co-founder Andrew Feldman will explore the growing demand for compute, energy, and infrastructure, how Cerebras is approaching those constraints differently, and what comes next if today’s AI hardw",
+      "linkedin_hook": "Can AI Keep Scaling? The Real Constraints Matter More Than Hype",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Cerebras Systems’ Andrew Feldman on whether AI can keep scaling at TechCrunch Disrupt 2026",
+          "url": "https://techcrunch.com/2026/09/30/cerebras-systems-andrew-feldman-on-whether-ai-can-keep-scaling-at-techcrunch-disrupt-2026/",
+          "source_type": "high_quality_journalism"
+        }
+      ]
+    },
+    {
+      "date": "2026-10-02",
+      "topic": "Musk’s AI chatbot Grok reportedly encouraged Trump to capture  Venezuela’s president",
+      "angle": "Impact of this technical shift on software builders and product strategy.",
+      "thesis": "President Trump reportedly asked for Grok's opinion before invading Venezuela and capturing Nicolás Maduro.",
+      "linkedin_hook": "AI Advice in Real-World Decisions",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Musk’s AI chatbot Grok reportedly encouraged Trump to capture  Venezuela’s president",
+          "url": "https://techcrunch.com/2026/10/01/musks-ai-chatbot-grok-reportedly-encouraged-trump-to-capture-venezuelas-president/",
+          "source_type": "high_quality_journalism"
+        }
+      ]
+    },
+    {
+      "date": "2026-10-03",
+      "topic": "Meta wants your next gadget to be Muse-infused",
+      "angle": "Impact of this technical shift on software builders and product strategy.",
+      "thesis": "Meta wants Muse in your TV and your toaster, so it's giving the code away for free.",
+      "linkedin_hook": "Muse is going from phones to toasters",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Meta wants your next gadget to be Muse-infused",
+          "url": "https://techcrunch.com/2026/10/02/meta-wants-you-to-build-your-own-muse-gadget/",
+          "source_type": "high_quality_journalism"
+        }
+      ]
+    },
+    {
+      "date": "2026-10-03",
+      "topic": "Sean Parker is rebuilding Stability AI around music",
+      "angle": "Impact of this technical shift on software builders and product strategy.",
+      "thesis": "Sean Parker, who once taught the music industry what asking for forgiveness looks like, is now back with the labels' blessing and money.",
+      "linkedin_hook": "Parker's New Direction",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Sean Parker is rebuilding Stability AI around music",
+          "url": "https://techcrunch.com/2026/10/02/sean-parker-is-rebuilding-stability-ai-around-music/",
+          "source_type": "high_quality_journalism"
+        }
+      ]
+    }
+  ]
+}
