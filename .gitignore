@@ -1,0 +1,21 @@
+# Environment & secret files
+.env
+*.env
+secrets/
+credentials/
+*.key
+*.log
+
+# Output & temp directories
+carousel-routine/temp/
+carousel-routine/output/
+content/research/
+content/linkedin/
+content/x/
+content/20*/
+
+# Node & Python caches
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
