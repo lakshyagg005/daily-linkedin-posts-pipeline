@@ -2,8 +2,9 @@ name: Personal Brand Daily Content Pipeline
 
 on:
   schedule:
-    # 08:17 Asia/Kolkata (IST) = 02:47 UTC
-    - cron: '47 2 * * *'
+    # Daily at 08:17 IST using GitHub's native timezone support
+    - cron: '17 8 * * *'
+      timezone: 'Asia/Kolkata'
   workflow_dispatch:
     inputs:
       force:
