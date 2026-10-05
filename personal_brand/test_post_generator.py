@@ -22,6 +22,7 @@ from personal_brand.post_generator import (
     LLMProvider,
     PostGenerator,
     validate_content_package,
+    extract_and_parse_json,
     BANNED_SLOP
 )
 from personal_brand.deduplication import PersonalBrandLog
@@ -148,19 +149,110 @@ def test_validation_logic():
     assert any("banned AI slop words" in e for e in err_slop)
 
 
-def test_malformed_json_handling():
-    """Test 3: Malformed JSON output handling."""
-    def bad_json_caller(sys_p, usr_p):
-        return "{this is not valid json..."
+def test_extract_valid_raw_json():
+    """Test 3a: Extract valid raw JSON."""
+    raw = '{"date": "2026-10-05", "topic": "Valid Raw JSON"}'
+    parsed = extract_and_parse_json(raw)
+    assert parsed["date"] == "2026-10-05"
+    assert parsed["topic"] == "Valid Raw JSON"
 
-    bad_provider = LLMProvider(custom_caller=bad_json_caller)
+
+def test_extract_json_inside_fences():
+    """Test 3b: Extract JSON inside markdown code fences."""
+    raw = '```json\n{"date": "2026-10-05", "topic": "JSON inside fences"}\n```'
+    parsed = extract_and_parse_json(raw)
+    assert parsed["topic"] == "JSON inside fences"
+
+    raw_no_lang = '```\n{"date": "2026-10-05", "topic": "Fenced without lang tag"}\n```'
+    parsed_no_lang = extract_and_parse_json(raw_no_lang)
+    assert parsed_no_lang["topic"] == "Fenced without lang tag"
+
+
+def test_extract_json_surrounding_text():
+    """Test 3c: Extract JSON with harmless surrounding text."""
+    raw_with_text = 'Here is the JSON package requested:\n```json\n{"date": "2026-10-05", "topic": "Surrounding Text"}\n```\nHope this helps!'
+    parsed = extract_and_parse_json(raw_with_text)
+    assert parsed["topic"] == "Surrounding Text"
+
+    raw_preamble = 'Sure! Here is your JSON: {"date": "2026-10-05", "topic": "Preamble Only"} Let me know if you need changes.'
+    parsed_preamble = extract_and_parse_json(raw_preamble)
+    assert parsed_preamble["topic"] == "Preamble Only"
+
+
+def test_extract_malformed_truncated_json():
+    """Test 3d: Reject malformed/truncated JSON."""
+    raw_truncated = '{"date": "2026-10-05", "topic": "Truncated'
+    try:
+        extract_and_parse_json(raw_truncated)
+        assert False, "Should have raised ValueError"
+    except ValueError as e:
+        assert "invalid JSON" in str(e) or "LLM returned invalid JSON" in str(e)
+
+
+def test_extract_unterminated_string():
+    """Test 3e: Unterminated string handling."""
+    raw_unterminated = '{"date": "2026-10-05", "caption": "Unterminated string starting here...'
+    try:
+        extract_and_parse_json(raw_unterminated)
+        assert False, "Should have raised ValueError"
+    except ValueError as e:
+        assert "invalid JSON" in str(e) or "Unterminated" in str(e)
+
+
+def test_retry_after_json_failure():
+    """Test 3f: Retry with concise correction prompt after initial JSON failure."""
+    calls = 0
+    received_prompts = []
+
+    def flaky_caller(sys_p, usr_p):
+        nonlocal calls
+        calls += 1
+        received_prompts.append(usr_p)
+        if calls == 1:
+            return "{invalid json unterminated string..."
+        return get_mock_valid_llm_response(sys_p, usr_p)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_log_path = Path(tmpdir) / "test-flaky-log.json"
+        log = PersonalBrandLog(log_path=tmp_log_path)
+        flaky_provider = LLMProvider(custom_caller=flaky_caller)
+        generator = PostGenerator(provider=flaky_provider, dedup_log=log)
+
+        research_input = {
+            "date": "2026-10-05",
+            "topic": "Flaky LLM Recovery Test",
+            "thesis": "Testing retry after JSON failure.",
+            "why_now": "Production robustness test.",
+            "potential_angle": "Resilience in LLM pipelines.",
+            "category": "AI & Software",
+            "sources": [{"title": "Test Source", "url": "https://example.com"}]
+        }
+
+        package = generator.generate_content_package(research_input)
+        assert package is not None
+        assert calls == 2
+        assert "PREVIOUS GENERATION ATTEMPT FAILED" in received_prompts[1]
+        assert "Please return ONLY a single valid" in received_prompts[1]
+
+
+def test_final_failure_when_json_remains_unrecoverable():
+    """Test 3g: Final failure after maximum retries when JSON remains unrecoverable."""
+    calls = 0
+
+    def bad_caller(sys_p, usr_p):
+        nonlocal calls
+        calls += 1
+        return "{permanently broken JSON..."
+
+    bad_provider = LLMProvider(custom_caller=bad_caller)
     generator = PostGenerator(provider=bad_provider)
 
     try:
-        generator.generate_content_package({"topic": "Test", "thesis": "Test", "date": "2026-09-30"})
-        assert False, "Should have raised ValueError for malformed JSON"
+        generator.generate_content_package({"topic": "Broken", "thesis": "Broken", "date": "2026-10-05"})
+        assert False, "Should have raised ValueError after 3 attempts"
     except ValueError as e:
-        assert "LLM returned invalid JSON" in str(e)
+        assert "failed editorial quality validation after 3 attempts" in str(e)
+        assert calls == 3
 
 
 def test_generator_mocked_end_to_end():
@@ -211,8 +303,20 @@ def run_all_tests():
     print("  ✓ Test 1: Provider detection & mock provider passed")
     test_validation_logic()
     print("  ✓ Test 2: Validation rules (1 LinkedIn, 3 X posts, slop check) passed")
-    test_malformed_json_handling()
-    print("  ✓ Test 3: Malformed JSON error handling passed")
+    test_extract_valid_raw_json()
+    print("  ✓ Test 3a: Extract valid raw JSON passed")
+    test_extract_json_inside_fences()
+    print("  ✓ Test 3b: Extract JSON inside code fences passed")
+    test_extract_json_surrounding_text()
+    print("  ✓ Test 3c: Extract JSON with surrounding text passed")
+    test_extract_malformed_truncated_json()
+    print("  ✓ Test 3d: Malformed/truncated JSON rejection passed")
+    test_extract_unterminated_string()
+    print("  ✓ Test 3e: Unterminated string error handling passed")
+    test_retry_after_json_failure()
+    print("  ✓ Test 3f: Retry with correction prompt after JSON failure passed")
+    test_final_failure_when_json_remains_unrecoverable()
+    print("  ✓ Test 3g: Final failure after 3 failed JSON attempts passed")
     test_generator_mocked_end_to_end()
     print("  ✓ Test 4: Generator mock E2E, deduplication & file saving passed")
     test_real_llm_provider_report()

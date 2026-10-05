@@ -39,16 +39,73 @@ BANNED_SLOP = [
 
 FREE_MODELS: Dict[str, List[str]] = {
     "openrouter": [
-        "liquid/lfm-2.5-2.6b:free",
-        "dots-studio/dots-3-note-preview:free",
-        "cohere/north-mini-code:free",
-        "nvidia/nemotron-3-super-120b-a12b:free",
-        "openrouter/free"
+        "openrouter/free",
+        "liquid/lfm-2.5-2.6b:free"
     ],
     "groq": ["llama-3.3-70b-versatile", "llama3-8b-8192"],
     "gemini": ["gemini-1.5-flash", "gemini-2.0-flash"],
     "anthropic": []  # Anthropic is paid-only, blocked in free_only mode
 }
+
+
+def extract_and_parse_json(raw_response: str) -> Dict[str, Any]:
+    """
+    Robustly extracts and parses JSON from an LLM response string.
+    Handles:
+    - Markdown code fences (```json ... ``` or ``` ... ```)
+    - Surrounding text before/after JSON
+    - Unescaped newlines/control characters in strings (via strict=False)
+    - Trailing commas
+    - Invalid escape sequences
+    Raises ValueError if JSON is unrecoverable or malformed.
+    """
+    if not raw_response or not raw_response.strip():
+        raise ValueError("LLM returned an empty response.")
+
+    text = raw_response.strip()
+    candidates = []
+
+    # 1. Extract content inside markdown code fences ```json ... ``` or ``` ... ```
+    fence_matches = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
+    for fm in fence_matches:
+        if fm.strip():
+            candidates.append(fm.strip())
+
+    # 2. Extract substring between first '{' and last '}'
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        extracted = text[first_brace:last_brace + 1].strip()
+        if extracted not in candidates:
+            candidates.append(extracted)
+
+    # 3. Fallback: raw trimmed text
+    if text not in candidates:
+        candidates.append(text)
+
+    last_error = None
+    for cand in candidates:
+        # Attempt A: Standard JSON parse
+        try:
+            return json.loads(cand)
+        except Exception as e:
+            last_error = e
+
+        # Attempt B: Non-strict JSON parse (allows unescaped control chars / literal newlines in strings)
+        try:
+            return json.loads(cand, strict=False)
+        except Exception as e:
+            last_error = e
+
+        # Attempt C: Remove trailing commas before } or ] and fix invalid backslashes, then non-strict parse
+        cleaned = re.sub(r',\s*([\}\]])', r'\1', cand)
+        cleaned = re.sub(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})', r'\\\\', cleaned)
+        try:
+            return json.loads(cleaned, strict=False)
+        except Exception as e:
+            last_error = e
+
+    raise ValueError(f"LLM returned invalid JSON: {last_error}")
 
 
 class LLMProvider:
@@ -64,6 +121,7 @@ class LLMProvider:
     ):
         self.custom_caller = custom_caller
         self.env_vars = load_env_file()
+        self.last_used_provider: Optional[str] = None
         
         # Determine free_only setting (default True if unset)
         if free_only is not None:
@@ -115,8 +173,14 @@ class LLMProvider:
     def __str__(self) -> str:
         return self.__repr__()
 
-    def generate(self, system_prompt: str, user_prompt: str) -> str:
+    def generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        exclude_providers: Optional[List[str]] = None
+    ) -> str:
         if self.custom_caller:
+            self.last_used_provider = "custom_mock"
             return self.custom_caller(system_prompt, user_prompt)
 
         if not self.is_configured():
@@ -131,17 +195,26 @@ class LLMProvider:
                     "Please configure OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY, or ANTHROPIC_TOKEN."
                 )
 
+        exclude_set = set(exclude_providers or [])
+        candidate_providers = [p for p in self.available_providers if p not in exclude_set]
+        if not candidate_providers:
+            candidate_providers = list(self.available_providers)
+
         errors = []
-        for provider in self.available_providers:
+        for provider in candidate_providers:
             try:
                 if provider == "openrouter":
-                    return self._call_openrouter(system_prompt, user_prompt)
+                    res = self._call_openrouter(system_prompt, user_prompt)
                 elif provider == "groq":
-                    return self._call_groq(system_prompt, user_prompt)
+                    res = self._call_groq(system_prompt, user_prompt)
                 elif provider == "gemini":
-                    return self._call_gemini(system_prompt, user_prompt)
+                    res = self._call_gemini(system_prompt, user_prompt)
                 elif provider == "anthropic":
-                    return self._call_anthropic(system_prompt, user_prompt)
+                    res = self._call_anthropic(system_prompt, user_prompt)
+                else:
+                    continue
+                self.last_used_provider = provider
+                return res
             except Exception as e:
                 # Sanitize error message so no API key or token is exposed in output
                 err_str = str(e)
@@ -457,18 +530,31 @@ Generate the complete JSON package now.
 """
 
         last_errors = []
+        failed_providers = []
+        current_user_prompt = user_prompt
+
         for attempt in range(3):
-            raw_response = self.provider.generate(system_prompt, user_prompt)
-            
-            clean_json = raw_response.strip()
-            if clean_json.startswith("```"):
-                clean_json = re.sub(r"^```(?:json)?", "", clean_json)
-                clean_json = re.sub(r"```$", "", clean_json).strip()
+            try:
+                raw_response = self.provider.generate(system_prompt, current_user_prompt, exclude_providers=failed_providers)
+            except Exception as gen_err:
+                last_errors = [f"Provider generation error: {gen_err}"]
+                continue
+
+            used_provider = getattr(self.provider, "last_used_provider", None)
 
             try:
-                data = json.loads(clean_json)
-            except Exception as e:
-                last_errors = [f"LLM returned invalid JSON: {e}"]
+                data = extract_and_parse_json(raw_response)
+            except ValueError as parse_err:
+                err_msg = str(parse_err)
+                last_errors = [err_msg]
+                if used_provider:
+                    failed_providers.append(used_provider)
+                current_user_prompt = (
+                    user_prompt +
+                    f"\n\nPREVIOUS GENERATION ATTEMPT FAILED: {err_msg}.\n"
+                    "Please return ONLY a single valid, complete JSON object matching the required schema, "
+                    "with properly escaped strings, no raw control characters, and no surrounding text or markdown code fences."
+                )
                 continue
 
             data["date"] = date_str
@@ -487,7 +573,11 @@ Generate the complete JSON package now.
                 return data
 
             last_errors = errors
-            user_prompt += f"\n\nPREVIOUS GENERATION ATTEMPT FAILED QUALITY CONTROL:\n{errors}\nPlease fix these issues and regenerate without any banned words."
+            current_user_prompt = (
+                user_prompt +
+                f"\n\nPREVIOUS GENERATION ATTEMPT FAILED QUALITY CONTROL:\n{errors}\n"
+                "Please fix these issues and return ONLY a valid JSON package matching the required schema without any banned words."
+            )
 
         raise ValueError(f"Content package failed editorial quality validation after 3 attempts: {last_errors}")
 
