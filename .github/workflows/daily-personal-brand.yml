@@ -56,12 +56,50 @@ jobs:
 
       - name: Run Personal Brand Daily Pipeline
         run: |
-          if [ "${{ github.event.inputs.force }}" = "true" ]; then
-            echo "Running pipeline with --force flag..."
-            python3 run_personal_brand_daily.py --force
-          else
-            echo "Running scheduled daily pipeline..."
-            python3 run_personal_brand_daily.py
+          MAX_ATTEMPTS=3
+          DELAY=20
+          attempt=1
+          success=0
+
+          while [ $attempt -le $MAX_ATTEMPTS ]; do
+            echo "=================================================="
+            echo "Executing Personal Brand Daily Pipeline (Attempt $attempt/$MAX_ATTEMPTS)..."
+            echo "=================================================="
+
+            if [ "${{ github.event.inputs.force }}" = "true" ]; then
+              CMD="python3 run_personal_brand_daily.py --force"
+            elif [ $attempt -gt 1 ]; then
+              TODAY=$(date +'%Y-%m-%d')
+              MANIFEST="content/${TODAY}/daily_manifest.json"
+              if [ -f "$MANIFEST" ] && grep -q '"status": "success"' "$MANIFEST"; then
+                echo "✓ Daily content package already completed successfully for ${TODAY}. Skipping retry."
+                success=1
+                break
+              fi
+              echo "Retrying failed pipeline execution with --force flag..."
+              CMD="python3 run_personal_brand_daily.py --force"
+            else
+              CMD="python3 run_personal_brand_daily.py"
+            fi
+
+            if $CMD; then
+              echo "✓ Pipeline execution completed successfully on attempt $attempt."
+              success=1
+              break
+            else
+              EXIT_CODE=$?
+              echo "❌ Pipeline attempt $attempt failed with exit code $EXIT_CODE."
+              if [ $attempt -lt $MAX_ATTEMPTS ]; then
+                echo "Waiting ${DELAY}s before next retry..."
+                sleep $DELAY
+              fi
+            fi
+            attempt=$((attempt + 1))
+          done
+
+          if [ $success -ne 1 ]; then
+            echo "❌ Pipeline failed after $MAX_ATTEMPTS attempts."
+            exit 1
           fi
 
       - name: Validate Output Quality & Artifact Integrity
