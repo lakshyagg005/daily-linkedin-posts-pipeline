@@ -15,9 +15,13 @@ from pathlib import Path
 import json
 import os
 import re
+import urllib
 import urllib.request
+import urllib.error
 import ssl
 import datetime
+import socket
+import time
 from typing import Dict, Any, List, Optional, Tuple, Callable
 
 from .deduplication import PersonalBrandLog
@@ -40,12 +44,37 @@ BANNED_SLOP = [
 FREE_MODELS: Dict[str, List[str]] = {
     "openrouter": [
         "openrouter/free",
-        "liquid/lfm-2.5-2.6b:free"
+        "google/gemma-4-31b-it:free",
+        "google/gemma-4-26b-a4b-it:free",
+        "liquid/lfm-2.5-2.6b:free",
+        "nvidia/nemotron-3.5-lightning:free",
     ],
-    "groq": ["llama-3.3-70b-versatile", "llama3-8b-8192"],
-    "gemini": ["gemini-1.5-flash", "gemini-2.0-flash"],
+    "groq": ["llama-3.3-70b-versatile", "llama3-8b-8192", "llama-3.1-8b-instant"],
+    "gemini": ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
     "anthropic": []  # Anthropic is paid-only, blocked in free_only mode
 }
+
+
+def fetch_openrouter_free_models(timeout: float = 5.0) -> List[str]:
+    """Dynamically fetches active 0-cost ($0 input, $0 output) free models from OpenRouter API catalog."""
+    url = "https://openrouter.ai/api/v1/models"
+    req = urllib.request.Request(url, headers={"User-Agent": "PersonalBrandPipeline/1.0"})
+    try:
+        with urllib.request.urlopen(req, context=SSL_CTX, timeout=timeout) as res:
+            data = json.loads(res.read().decode("utf-8"))
+            models = data.get("data", [])
+            free_ids = []
+            for m in models:
+                mid = m.get("id", "")
+                pricing = m.get("pricing", {})
+                prompt_cost = float(pricing.get("prompt", 0))
+                completion_cost = float(pricing.get("completion", 0))
+                if prompt_cost == 0 and completion_cost == 0:
+                    if mid not in free_ids:
+                        free_ids.append(mid)
+            return free_ids
+    except Exception:
+        return []
 
 
 def extract_and_parse_json(raw_response: str) -> Dict[str, Any]:
@@ -111,7 +140,8 @@ def extract_and_parse_json(raw_response: str) -> Dict[str, Any]:
 class LLMProvider:
     """
     Abstraction for LLM API calls with security credential masking,
-    cost safety checks (FREE_ONLY mode), and graceful provider fallback.
+    cost safety checks (FREE_ONLY mode), dynamic free model resolution,
+    exponential backoff for transient errors, and circuit-breaker provider fallback.
     """
 
     def __init__(
@@ -122,7 +152,11 @@ class LLMProvider:
         self.custom_caller = custom_caller
         self.env_vars = load_env_file()
         self.last_used_provider: Optional[str] = None
-        
+        self.disabled_providers: Dict[str, str] = {}
+        self.disabled_models: set = set()
+        self.provider_statuses: Dict[str, str] = {}
+        self.disable_backoff_sleep: bool = False
+
         # Determine free_only setting (default True if unset)
         if free_only is not None:
             self.free_only = free_only
@@ -133,6 +167,11 @@ class LLMProvider:
         self.available_providers = self._detect_providers()
         self.provider_name = self.available_providers[0] if self.available_providers else "none"
 
+    def mark_provider_disabled(self, provider: str, reason: str) -> None:
+        """Marks a provider as disabled/unavailable for the remainder of the current run."""
+        self.disabled_providers[provider] = reason
+        self.provider_statuses[provider] = reason
+
     def _get_key(self, key_name: str) -> Optional[str]:
         return os.environ.get(key_name) or self.env_vars.get(key_name)
 
@@ -140,6 +179,7 @@ class LLMProvider:
         if self.custom_caller is not None:
             return ["custom_mock"]
         
+        # OpenRouter is PRIMARY free provider
         providers = []
         if self._get_key("OPENROUTER_API_KEY"):
             providers.append("openrouter")
@@ -158,20 +198,95 @@ class LLMProvider:
 
     def get_masked_status(self) -> Dict[str, Any]:
         """Returns provider configuration status with all credentials strictly masked."""
+        statuses = {}
+        for p in ["openrouter", "groq", "gemini", "anthropic"]:
+            key_name = {
+                "openrouter": "OPENROUTER_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "gemini": "GEMINI_API_KEY",
+                "anthropic": "ANTHROPIC_TOKEN"
+            }[p]
+            has_key = bool(self._get_key(key_name))
+            if p in self.disabled_providers:
+                statuses[p] = self.disabled_providers[p]
+            elif has_key and p in self.available_providers:
+                statuses[p] = self.provider_statuses.get(p, "AVAILABLE")
+            else:
+                statuses[p] = "NOT_CONFIGURED"
+
         return {
             "OPENROUTER_API_KEY": "configured" if bool(self._get_key("OPENROUTER_API_KEY")) else "not_configured",
             "GROQ_API_KEY": "configured" if bool(self._get_key("GROQ_API_KEY")) else "not_configured",
             "GEMINI_API_KEY": "configured" if bool(self._get_key("GEMINI_API_KEY")) else "not_configured",
             "ANTHROPIC_TOKEN": "configured" if bool(self._get_key("ANTHROPIC_TOKEN")) else "not_configured",
             "free_only_mode": self.free_only,
-            "active_providers": self.available_providers
+            "active_providers": [p for p in self.available_providers if p not in self.disabled_providers],
+            "provider_statuses": statuses
         }
 
+    def get_provider_status_report(self) -> str:
+        """Generates a human-readable provider status report with masked credentials."""
+        lines = ["Provider Status:"]
+        status_map = self.get_masked_status()["provider_statuses"]
+        for p in ["openrouter", "groq", "gemini", "anthropic"]:
+            if p == "anthropic" and self.free_only:
+                continue
+            lines.append(f"- {p}: {status_map.get(p, 'NOT_CONFIGURED')}")
+        return "\n".join(lines)
+
     def __repr__(self) -> str:
-        return f"LLMProvider(free_only={self.free_only}, providers={self.available_providers})"
+        active = [p for p in self.available_providers if p not in self.disabled_providers]
+        return f"LLMProvider(free_only={self.free_only}, active_providers={active}, disabled={self.disabled_providers})"
 
     def __str__(self) -> str:
         return self.__repr__()
+
+    def _sanitize_error(self, err: Any) -> str:
+        err_str = str(err)
+        for k in ["OPENROUTER_API_KEY", "GROQ_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_TOKEN"]:
+            val = self._get_key(k)
+            if val and len(val) > 4:
+                err_str = err_str.replace(val, "[MASKED_KEY]")
+        return err_str
+
+    def _call_with_retry(
+        self,
+        func: Callable[[], str],
+        max_retries: int = 2,
+        backoff_delays: Optional[List[float]] = None
+    ) -> str:
+        if backoff_delays is None:
+            if getattr(self, "disable_backoff_sleep", False) or os.environ.get("TEST_MODE") == "1":
+                backoff_delays = [0.0, 0.0, 0.0]
+            else:
+                backoff_delays = [2.0, 5.0, 10.0]
+
+        attempt = 0
+        while True:
+            try:
+                return func()
+            except urllib.error.HTTPError as e:
+                # Deterministic errors (401, 403, 404, 400) should NOT be retried
+                if e.code in (401, 403, 404, 400):
+                    raise e
+                # Transient errors: 429, 5xx
+                if attempt < max_retries and (e.code == 429 or e.code >= 500):
+                    delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
+                    print(f"[WARN] Transient HTTP {e.code} error. Retrying in {delay}s (Attempt {attempt+1}/{max_retries})...")
+                    if delay > 0:
+                        time.sleep(delay)
+                    attempt += 1
+                    continue
+                raise e
+            except (urllib.error.URLError, TimeoutError, socket.timeout) as e:
+                if attempt < max_retries:
+                    delay = backoff_delays[min(attempt, len(backoff_delays) - 1)]
+                    print(f"[WARN] Transient network/timeout error ({e}). Retrying in {delay}s (Attempt {attempt+1}/{max_retries})...")
+                    if delay > 0:
+                        time.sleep(delay)
+                    attempt += 1
+                    continue
+                raise e
 
     def generate(
         self,
@@ -196,9 +311,15 @@ class LLMProvider:
                 )
 
         exclude_set = set(exclude_providers or [])
-        candidate_providers = [p for p in self.available_providers if p not in exclude_set]
+        candidate_providers = [
+            p for p in self.available_providers
+            if p not in self.disabled_providers and p not in exclude_set
+        ]
+
         if not candidate_providers:
-            candidate_providers = list(self.available_providers)
+            report = self.get_provider_status_report()
+            print(f"\n{report}")
+            raise RuntimeError(f"No available active LLM providers remaining.\n{report}")
 
         errors = []
         for provider in candidate_providers:
@@ -214,34 +335,54 @@ class LLMProvider:
                 else:
                     continue
                 self.last_used_provider = provider
+                self.provider_statuses[provider] = "AVAILABLE"
                 return res
             except Exception as e:
-                # Sanitize error message so no API key or token is exposed in output
-                err_str = str(e)
-                for k in ["OPENROUTER_API_KEY", "GROQ_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_TOKEN"]:
-                    val = self._get_key(k)
-                    if val and len(val) > 4:
-                        err_str = err_str.replace(val, "[MASKED_KEY]")
+                err_str = self._sanitize_error(e)
                 err_msg = f"Provider '{provider}' call failed: {err_str}"
                 print(f"[WARN] {err_msg}. Falling back to next available provider...")
                 errors.append(err_msg)
 
-        raise RuntimeError(f"All configured LLM providers failed:\n" + "\n".join(errors))
+        report = self.get_provider_status_report()
+        print(f"\n{report}")
+        raise RuntimeError(f"All configured LLM providers failed:\n" + "\n".join(errors) + f"\n\n{report}")
 
     def _call_openrouter(self, system_prompt: str, user_prompt: str) -> str:
+        if "openrouter" in self.disabled_providers:
+            raise RuntimeError(f"OpenRouter is disabled: {self.disabled_providers['openrouter']}")
+
         api_key = self._get_key("OPENROUTER_API_KEY")
+        if not api_key:
+            self.mark_provider_disabled("openrouter", "UNAVAILABLE (Missing API Key)")
+            raise RuntimeError("OPENROUTER_API_KEY not configured.")
+
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-        
-        models = FREE_MODELS["openrouter"] if self.free_only else ["google/gemma-4-31b-it:free", "anthropic/claude-3.5-sonnet"]
 
+        # Candidate free models resolution
+        dynamic_free_list = fetch_openrouter_free_models()
+        dynamic_free_set = set(dynamic_free_list)
+
+        candidate_models = ["openrouter/free"]
+        for dm in dynamic_free_list:
+            if dm not in candidate_models:
+                candidate_models.append(dm)
+
+        for sm in FREE_MODELS["openrouter"]:
+            if sm not in candidate_models:
+                candidate_models.append(sm)
+
+        candidate_models = [m for m in candidate_models if m not in self.disabled_models]
         last_err = None
-        for m in models:
-            if self.free_only and not m.endswith(":free") and m != "openrouter/free":
+
+        for m in candidate_models:
+            # Under free_only mode, only allow openrouter/free, models ending with :free, or verified dynamic $0 cost models
+            if self.free_only and m not in dynamic_free_set and not m.endswith(":free") and m != "openrouter/free":
                 continue
+
             for use_json_format in [True, False]:
                 payload = {
                     "model": m,
@@ -254,28 +395,56 @@ class LLMProvider:
                 if use_json_format:
                     payload["response_format"] = {"type": "json_object"}
 
-                try:
+                def _do_request():
                     req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
                     with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
                         resp = json.loads(res.read().decode("utf-8"))
                         if resp and "choices" in resp and len(resp["choices"]) > 0:
-                            content = resp["choices"][0]["message"]["content"]
-                            if content:
-                                return content
+                            msg = resp["choices"][0].get("message", {})
+                            content = msg.get("content") or msg.get("reasoning")
+                            if content and isinstance(content, str) and content.strip():
+                                return content.strip()
+                        raise RuntimeError(f"Empty response from OpenRouter model {m}")
+
+                try:
+                    res_content = self._call_with_retry(_do_request)
+                    if res_content:
+                        return res_content
+                except urllib.error.HTTPError as http_err:
+                    last_err = http_err
+                    if http_err.code in (401, 403):
+                        self.mark_provider_disabled("openrouter", f"UNAVAILABLE (HTTP {http_err.code})")
+                        raise RuntimeError(f"OpenRouter authentication failed: HTTP {http_err.code}")
+                    elif http_err.code == 404:
+                        self.disabled_models.add(m)
+                        break  # Move to next model
+                    elif http_err.code == 400 and use_json_format:
+                        continue  # Try without json_object response_format
+                    else:
+                        break
                 except Exception as e:
                     last_err = e
                     continue
 
-        raise RuntimeError(f"OpenRouter models failed. Last error: {last_err}")
+        if "openrouter" not in self.disabled_providers:
+            self.mark_provider_disabled("openrouter", f"UNAVAILABLE (All free models failed: {self._sanitize_error(last_err)})")
+        raise RuntimeError(f"OpenRouter models failed. Last error: {self._sanitize_error(last_err)}")
 
     def _call_groq(self, system_prompt: str, user_prompt: str) -> str:
+        if "groq" in self.disabled_providers:
+            raise RuntimeError(f"Groq is disabled: {self.disabled_providers['groq']}")
+
         api_key = self._get_key("GROQ_API_KEY")
+        if not api_key:
+            self.mark_provider_disabled("groq", "UNAVAILABLE (Missing API Key)")
+            raise RuntimeError("GROQ_API_KEY not configured.")
+
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
-        models = FREE_MODELS["groq"]
+        models = [m for m in FREE_MODELS["groq"] if m not in self.disabled_models]
         last_err = None
 
         for m in models:
@@ -288,21 +457,45 @@ class LLMProvider:
                 "max_tokens": 4000,
                 "response_format": {"type": "json_object"}
             }
-            try:
+
+            def _do_request():
                 req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
                 with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
                     resp = json.loads(res.read().decode("utf-8"))
                     if resp and "choices" in resp and len(resp["choices"]) > 0:
                         return resp["choices"][0]["message"]["content"]
+                    raise RuntimeError(f"Empty response from Groq model {m}")
+
+            try:
+                res_content = self._call_with_retry(_do_request)
+                if res_content:
+                    return res_content
+            except urllib.error.HTTPError as http_err:
+                last_err = http_err
+                if http_err.code in (401, 403):
+                    self.mark_provider_disabled("groq", f"UNAVAILABLE (HTTP {http_err.code})")
+                    raise RuntimeError(f"Groq API returned HTTP {http_err.code}")
+                elif http_err.code == 404:
+                    self.disabled_models.add(m)
+                    continue
             except Exception as e:
                 last_err = e
                 continue
 
-        raise RuntimeError(f"Groq models failed. Last error: {last_err}")
+        if "groq" not in self.disabled_providers:
+            self.mark_provider_disabled("groq", f"UNAVAILABLE (All models failed: {self._sanitize_error(last_err)})")
+        raise RuntimeError(f"Groq models failed. Last error: {self._sanitize_error(last_err)}")
 
     def _call_gemini(self, system_prompt: str, user_prompt: str) -> str:
+        if "gemini" in self.disabled_providers:
+            raise RuntimeError(f"Gemini is disabled: {self.disabled_providers['gemini']}")
+
         api_key = self._get_key("GEMINI_API_KEY")
-        models = FREE_MODELS["gemini"]
+        if not api_key:
+            self.mark_provider_disabled("gemini", "UNAVAILABLE (Missing API Key)")
+            raise RuntimeError("GEMINI_API_KEY not configured.")
+
+        models = [m for m in FREE_MODELS["gemini"] if m not in self.disabled_models]
         last_err = None
 
         for m in models:
@@ -314,17 +507,34 @@ class LLMProvider:
                 }],
                 "generationConfig": {"response_mime_type": "application/json"}
             }
-            try:
+
+            def _do_request():
                 req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
                 with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
                     resp = json.loads(res.read().decode("utf-8"))
                     if resp and "candidates" in resp and len(resp["candidates"]) > 0:
                         return resp["candidates"][0]["content"]["parts"][0]["text"]
+                    raise RuntimeError(f"Empty response from Gemini model {m}")
+
+            try:
+                res_content = self._call_with_retry(_do_request)
+                if res_content:
+                    return res_content
+            except urllib.error.HTTPError as http_err:
+                last_err = http_err
+                if http_err.code in (401, 403):
+                    self.mark_provider_disabled("gemini", f"UNAVAILABLE (HTTP {http_err.code})")
+                    raise RuntimeError(f"Gemini API returned HTTP {http_err.code}")
+                elif http_err.code == 404:
+                    self.disabled_models.add(m)
+                    continue
             except Exception as e:
                 last_err = e
                 continue
 
-        raise RuntimeError(f"Gemini models failed. Last error: {last_err}")
+        if "gemini" not in self.disabled_providers:
+            self.mark_provider_disabled("gemini", "UNAVAILABLE (HTTP 404 / All models failed)")
+        raise RuntimeError(f"Gemini models failed. Last error: {self._sanitize_error(last_err)}")
 
     def _call_anthropic(self, system_prompt: str, user_prompt: str) -> str:
         if self.free_only:
@@ -538,7 +748,7 @@ Generate the complete JSON package now.
                 raw_response = self.provider.generate(system_prompt, current_user_prompt, exclude_providers=failed_providers)
             except Exception as gen_err:
                 last_errors = [f"Provider generation error: {gen_err}"]
-                continue
+                break
 
             used_provider = getattr(self.provider, "last_used_provider", None)
 

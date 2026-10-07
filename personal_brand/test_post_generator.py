@@ -7,6 +7,9 @@ Validates provider detection, input validation, quality control (1 LinkedIn post
 malformed JSON error handling, and artifact file saving.
 """
 
+import urllib
+import urllib.request
+import urllib.error
 import sys
 import json
 import tempfile
@@ -297,6 +300,253 @@ def test_real_llm_provider_report():
         print(f"\n  [INFO] Real LLM provider detected: '{real_provider.provider_name}'")
 
 
+from unittest.mock import patch, MagicMock
+import io
+
+
+def create_mock_http_error(code: int, msg: str = "Error"):
+    return urllib.error.HTTPError(
+        url="http://test",
+        code=code,
+        msg=msg,
+        hdrs={},
+        fp=io.BytesIO(f'{{"error": "{msg}"}}'.encode("utf-8"))
+    )
+
+
+def create_mock_http_success(json_data: dict):
+    mock_res = MagicMock()
+    mock_res.status = 200
+    mock_res.read.return_value = json.dumps(json_data).encode("utf-8")
+    mock_res.__enter__.return_value = mock_res
+    mock_res.__exit__.return_value = None
+    return mock_res
+
+
+def test_provider_403_handling():
+    """Test 6: Provider 403 response marks provider UNAVAILABLE (HTTP 403) and excludes it."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+    provider.env_vars["GROQ_API_KEY"] = "dummy_groq_key_12345"
+
+    def mock_urlopen(req, context=None, timeout=None):
+        raise create_mock_http_error(403, "Forbidden")
+
+    with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_urlopen):
+        try:
+            provider._call_groq("sys", "usr")
+        except Exception:
+            pass
+
+    assert provider.disabled_providers.get("groq") == "UNAVAILABLE (HTTP 403)"
+    status = provider.get_masked_status()["provider_statuses"]
+    assert status["groq"] == "UNAVAILABLE (HTTP 403)"
+
+
+def test_provider_404_handling():
+    """Test 7: Provider 404 response marks model and provider as disabled/unavailable."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+    provider.env_vars["GEMINI_API_KEY"] = "dummy_gemini_key_12345"
+
+    def mock_urlopen(req, context=None, timeout=None):
+        raise create_mock_http_error(404, "Not Found")
+
+    with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_urlopen):
+        try:
+            provider._call_gemini("sys", "usr")
+        except Exception:
+            pass
+
+    assert "gemini" in provider.disabled_providers
+    assert "UNAVAILABLE" in provider.disabled_providers["gemini"]
+
+
+def test_provider_429_retry():
+    """Test 8: HTTP 429 triggers exponential backoff retry and succeeds if retry works."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+    attempts = 0
+
+    def mock_request():
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise create_mock_http_error(429, "Rate limit")
+        return "success_after_429"
+
+    res = provider._call_with_retry(mock_request, max_retries=2)
+    assert res == "success_after_429"
+    assert attempts == 2
+
+
+def test_provider_timeout_retry():
+    """Test 9: Timeout error triggers retry and succeeds on subsequent attempt."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+    attempts = 0
+
+    def mock_request():
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise TimeoutError("Read timed out")
+        return "success_after_timeout"
+
+    res = provider._call_with_retry(mock_request, max_retries=2)
+    assert res == "success_after_timeout"
+    assert attempts == 2
+
+
+def test_provider_exclusion_after_deterministic_failure():
+    """Test 10: Provider is excluded from remaining attempts after deterministic failure."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+    provider.available_providers = ["groq", "openrouter"]
+    provider.disabled_providers["groq"] = "UNAVAILABLE (HTTP 403)"
+
+    groq_called = False
+    def mock_groq(sys_p, usr_p):
+        nonlocal groq_called
+        groq_called = True
+        return "groq_res"
+
+    def mock_openrouter(sys_p, usr_p):
+        return get_mock_valid_llm_response(sys_p, usr_p)
+
+    with patch.object(provider, "_call_groq", side_effect=mock_groq), \
+         patch.object(provider, "_call_openrouter", side_effect=mock_openrouter):
+        res = provider.generate("sys", "usr")
+        assert res is not None
+        assert not groq_called, "Disabled provider Groq should not have been called!"
+
+
+def test_openrouter_fallback_models():
+    """Test 11: OpenRouter model cycling when primary model fails."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+
+    called_models = []
+    def mock_urlopen(req, context=None, timeout=None):
+        req_data = json.loads(req.data.decode("utf-8"))
+        model = req_data["model"]
+        called_models.append(model)
+        if model == "openrouter/free":
+            raise create_mock_http_error(404, "Model not found")
+        
+        valid_json = get_mock_valid_llm_response("sys", "usr")
+        payload = {"choices": [{"message": {"content": valid_json}}]}
+        return create_mock_http_success(payload)
+
+    with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_urlopen):
+        res = provider._call_openrouter("sys", "usr")
+        assert res is not None
+        assert "openrouter/free" in called_models
+        assert len(called_models) > 1
+
+
+def test_groq_403_gemini_404_openrouter_success():
+    """Test 12 (Requirement 16): Groq -> 403, Gemini -> 404, OpenRouter -> SUCCESS."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log = PersonalBrandLog(log_path=Path(tmpdir) / "test-log.json")
+        provider = LLMProvider(free_only=True)
+        provider.disable_backoff_sleep = True
+        provider.available_providers = ["openrouter", "groq", "gemini"]
+
+        provider.mark_provider_disabled("groq", "UNAVAILABLE (HTTP 403)")
+        provider.mark_provider_disabled("gemini", "UNAVAILABLE (HTTP 404)")
+
+        def mock_openrouter(sys_p, usr_p):
+            return get_mock_valid_llm_response(sys_p, usr_p)
+
+        with patch.object(provider, "_call_openrouter", side_effect=mock_openrouter):
+            generator = PostGenerator(provider=provider, dedup_log=log)
+            research_input = {
+                "date": "2026-10-07",
+                "topic": "Resilience Test 16",
+                "thesis": "Testing fallback when Groq=403 and Gemini=404",
+                "category": "AI & Software",
+                "sources": [{"title": "Test", "url": "https://example.com"}]
+            }
+            pkg = generator.generate_content_package(research_input)
+            assert pkg is not None
+            assert "topic" in pkg
+            assert provider.last_used_provider == "openrouter"
+
+
+def test_groq_403_gemini_404_openrouter_modelA_fail_modelB_success():
+    """Test 13 (Requirement 17): Groq -> 403, Gemini -> 404, OpenRouter Model A -> temp fail, Model B -> SUCCESS."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log = PersonalBrandLog(log_path=Path(tmpdir) / "test-log.json")
+        provider = LLMProvider(free_only=True)
+        provider.disable_backoff_sleep = True
+        provider.available_providers = ["openrouter", "groq", "gemini"]
+        provider.mark_provider_disabled("groq", "UNAVAILABLE (HTTP 403)")
+        provider.mark_provider_disabled("gemini", "UNAVAILABLE (HTTP 404)")
+
+        model_attempts = []
+        def mock_urlopen(req, context=None, timeout=None):
+            req_data = json.loads(req.data.decode("utf-8"))
+            model = req_data["model"]
+            model_attempts.append(model)
+            if model == "openrouter/free":
+                raise create_mock_http_error(429, "Rate limited")
+            
+            valid_json = get_mock_valid_llm_response("sys", "usr")
+            payload = {"choices": [{"message": {"content": valid_json}}]}
+            return create_mock_http_success(payload)
+
+        with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_urlopen):
+            generator = PostGenerator(provider=provider, dedup_log=log)
+            research_input = {
+                "date": "2026-10-07",
+                "topic": "Resilience Test 17",
+                "thesis": "Testing OpenRouter Model A fail and Model B success",
+                "category": "AI & Software",
+                "sources": [{"title": "Test", "url": "https://example.com"}]
+            }
+            pkg = generator.generate_content_package(research_input)
+            assert pkg is not None
+            assert "topic" in pkg
+            assert len(model_attempts) >= 2
+
+
+def test_production_resilience_partial_provider_failure():
+    """Test 14 (Requirement 18): Pipeline succeeds if at least 1 valid free provider is available."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log = PersonalBrandLog(log_path=Path(tmpdir) / "test-log.json")
+        provider = LLMProvider(free_only=True)
+        provider.disable_backoff_sleep = True
+        provider.available_providers = ["groq", "gemini", "openrouter"]
+
+        def mock_groq(sys_p, usr_p):
+            provider.mark_provider_disabled("groq", "UNAVAILABLE (HTTP 403)")
+            raise create_mock_http_error(403, "Forbidden")
+
+        def mock_gemini(sys_p, usr_p):
+            provider.mark_provider_disabled("gemini", "UNAVAILABLE (HTTP 404)")
+            raise create_mock_http_error(404, "Not Found")
+
+        def mock_openrouter(sys_p, usr_p):
+            return get_mock_valid_llm_response(sys_p, usr_p)
+
+        with patch.object(provider, "_call_groq", side_effect=mock_groq), \
+             patch.object(provider, "_call_gemini", side_effect=mock_gemini), \
+             patch.object(provider, "_call_openrouter", side_effect=mock_openrouter):
+            
+            generator = PostGenerator(provider=provider, dedup_log=log)
+            research_input = {
+                "date": "2026-10-07",
+                "topic": "Production Resilience Test 18",
+                "thesis": "Pipeline succeeds as long as at least 1 free provider works",
+                "category": "AI & Software",
+                "sources": [{"title": "Test", "url": "https://example.com"}]
+            }
+            pkg = generator.generate_content_package(research_input)
+            assert pkg is not None
+            assert "topic" in pkg
+
+
 def run_all_tests():
     print("Running Personal Brand PostGenerator Unit & Integration Test Suite...")
     test_provider_detection()
@@ -321,6 +571,24 @@ def run_all_tests():
     print("  ✓ Test 4: Generator mock E2E, deduplication & file saving passed")
     test_real_llm_provider_report()
     print("  ✓ Test 5: Real provider credentials state checked")
+    test_provider_403_handling()
+    print("  ✓ Test 6: Provider 403 error handling & circuit breaker passed")
+    test_provider_404_handling()
+    print("  ✓ Test 7: Provider 404 error handling & model exclusion passed")
+    test_provider_429_retry()
+    print("  ✓ Test 8: Provider 429 exponential backoff retry passed")
+    test_provider_timeout_retry()
+    print("  ✓ Test 9: Provider timeout retry passed")
+    test_provider_exclusion_after_deterministic_failure()
+    print("  ✓ Test 10: Provider exclusion after deterministic failure passed")
+    test_openrouter_fallback_models()
+    print("  ✓ Test 11: OpenRouter model fallback passed")
+    test_groq_403_gemini_404_openrouter_success()
+    print("  ✓ Test 12: Groq 403 + Gemini 404 + OpenRouter SUCCESS passed (Req 16)")
+    test_groq_403_gemini_404_openrouter_modelA_fail_modelB_success()
+    print("  ✓ Test 13: Groq 403 + Gemini 404 + OpenRouter Model A fail -> Model B SUCCESS passed (Req 17)")
+    test_production_resilience_partial_provider_failure()
+    print("  ✓ Test 14: Production resilience with partial provider failures passed (Req 18)")
     print("\nALL POST GENERATOR TESTS PASSED SUCCESSFULLY! 🎉")
 
 
