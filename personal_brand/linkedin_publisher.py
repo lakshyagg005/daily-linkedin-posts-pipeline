@@ -80,6 +80,14 @@ class LinkedInPublisher:
         """Check if minimum required LinkedIn credentials are present."""
         return bool(self._get_credential("LINKEDIN_ACCESS_TOKEN"))
 
+    def is_auto_publish_enabled(self) -> bool:
+        """
+        Safety guard: Live publishing is disabled by default unless explicitly enabled
+        via LINKEDIN_AUTO_PUBLISH_ENABLED=true or LINKEDIN_PUBLISH_LIVE=true.
+        """
+        val = self._get_credential("LINKEDIN_AUTO_PUBLISH_ENABLED") or self._get_credential("LINKEDIN_PUBLISH_LIVE")
+        return str(val).lower() in ("true", "1", "yes")
+
     def get_masked_status(self) -> Dict[str, Any]:
         """Return masked credential status for debugging without exposing secrets."""
         token = self._get_credential("LINKEDIN_ACCESS_TOKEN")
@@ -459,6 +467,20 @@ class LinkedInPublisher:
                 "status": "skipped_not_configured",
                 "error": "LINKEDIN_ACCESS_TOKEN is missing",
             }
+
+        # Step 2b: Safety guard — check if live publishing is explicitly approved
+        if not self.is_auto_publish_enabled() and not self.dry_run:
+            print("  🔒 [SAFETY GUARD ACTIVE]: Live LinkedIn publishing is paused pending user approval.")
+            print("     LINKEDIN_AUTO_PUBLISH_ENABLED is false. Post and carousel PDF are saved for review.")
+            safe_status = {
+                "date": date_str,
+                "status": "safe_mode_draft_only",
+                "message": "Live publishing is paused pending user approval (LINKEDIN_AUTO_PUBLISH_ENABLED is false).",
+                "pdf_file": str(carousel_pdf_path) if carousel_pdf_path else None,
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+            self._save_publish_status(date_str, safe_status)
+            return safe_status
 
         # Record pending state
         self._save_publish_status(date_str, {

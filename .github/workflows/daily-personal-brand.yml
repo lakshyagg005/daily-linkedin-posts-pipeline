@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      publish_live:
+        description: 'Publish live to LinkedIn (default: false / draft mode)'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: personal-brand-daily
@@ -33,6 +38,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
       LINKEDIN_PERSON_URN: ${{ secrets.LINKEDIN_PERSON_URN }}
+      LINKEDIN_AUTO_PUBLISH_ENABLED: ${{ vars.LINKEDIN_AUTO_PUBLISH_ENABLED || inputs.publish_live || 'false' }}
 
     steps:
       - name: Checkout Repository
@@ -227,10 +233,15 @@ jobs:
               print(f'  • Post ID:         {post_id}')
               print(f'  • Post Type:       {post_type}')
               print(f'  • Carousel Status: {carousel_status}')
+          elif pub_status == 'safe_mode_draft_only':
+              print('🔒 [SAFETY GUARD ACTIVE]: Live LinkedIn publishing is paused pending user approval.')
+              print(f'  • Status:          {pub_status}')
+              print('  • Note:            Post and carousel PDF are preserved for manual upload/review.')
+              print('  • To enable live:  Set LINKEDIN_AUTO_PUBLISH_ENABLED=true or trigger with publish_live=true.')
           else:
               print(f'❌ LinkedIn post publishing failed or incomplete.')
               print(f'  • Status: {pub_status}')
-              print(f'  • Error:  {status.get(\"error\")}')
+              print(f'  • Error:  {status.get("error")}')
               # Non-fatal to preserve generated artifacts
           "
 
@@ -261,7 +272,8 @@ jobs:
           if ! git diff --staged --quiet; then
             echo "Changes detected in personal-brand-log.json. Committing and pushing..."
             git commit -m "chore(brand): persist publication state for ${{ steps.date.outputs.date }} [skip ci]"
-            git push
+            git pull --rebase origin main || git rebase --abort
+            git push origin main
           else
             echo "No changes to commit in personal-brand-log.json."
           fi

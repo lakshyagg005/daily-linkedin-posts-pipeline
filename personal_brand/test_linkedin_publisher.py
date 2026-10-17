@@ -84,7 +84,10 @@ class TestLinkedInPublisher(unittest.TestCase):
                 return 201, {"x-restli-id": "urn:li:share:99887766"}, b"{}"
             return 404, {}, b"Not found"
 
-        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
             publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=mock_client)
             res = publisher.publish_daily_package(
                 post_text="## Hello world\n\nThis is a real LinkedIn test.",
@@ -160,7 +163,10 @@ class TestLinkedInPublisher(unittest.TestCase):
                 return 201, {"x-restli-id": "urn:li:share:carousel_post_555"}, b"{}"
             return 404, {}, b"Not found"
 
-        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
             publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=mock_client)
             res = publisher.publish_daily_package(
                 post_text="Check out this 7-slide carousel!",
@@ -197,7 +203,10 @@ class TestLinkedInPublisher(unittest.TestCase):
                 return 201, {"x-restli-id": "urn:li:share:fallback_text_post"}, b"{}"
             return 404, {}, b"Not found"
 
-        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
             publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=mock_client)
             res = publisher.publish_daily_package(
                 post_text="Important daily insight.",
@@ -226,7 +235,10 @@ class TestLinkedInPublisher(unittest.TestCase):
                 return 401, {}, b'{"message": "Expired access token"}'
             return 404, {}, b""
 
-        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
             publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=mock_client)
             res = publisher.publish_daily_package(
                 post_text="Text",
@@ -289,7 +301,10 @@ class TestLinkedInPublisher(unittest.TestCase):
                 raise TimeoutError("Socket read timed out while waiting for LinkedIn server")
             return 404, {}, b""
 
-        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
             publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=timeout_mock)
             res = publisher.publish_daily_package(
                 post_text="Text",
@@ -302,6 +317,28 @@ class TestLinkedInPublisher(unittest.TestCase):
             self.assertIn("Blind retry halted", res["error"])
             # Verified: Exactly ONE POST call was attempted. Zero blind retries!
             self.assertEqual(post_calls, 1)
+
+    def test_safe_mode_draft_only_when_auto_publish_disabled(self):
+        """
+        Safety Guard: When LINKEDIN_AUTO_PUBLISH_ENABLED is false (the default),
+        the publisher MUST NOT make any publish calls to LinkedIn!
+        It must safely return 'safe_mode_draft_only'.
+        """
+        def failing_mock(url, **kwargs):
+            self.fail("HTTP call made to LinkedIn despite LINKEDIN_AUTO_PUBLISH_ENABLED=false!")
+
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "false",
+        }):
+            publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=failing_mock)
+            res = publisher.publish_daily_package(
+                post_text="Safe mode text",
+                topic="Safe Mode Topic",
+                date_str=self.date_str,
+            )
+            self.assertEqual(res["status"], "safe_mode_draft_only")
+            self.assertIn("LINKEDIN_AUTO_PUBLISH_ENABLED", res["message"])
 
     def test_dry_run_mode(self):
         """Test dry run makes zero network calls and generates mock IDs."""

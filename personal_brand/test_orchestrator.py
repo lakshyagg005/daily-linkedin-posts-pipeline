@@ -96,7 +96,7 @@ def test_mocked_pipeline_e2e_and_manifest():
 
         assert res["status"] == "success"
         assert res["validation"]["content"] == "passed"
-        assert res["publishing"]["linkedin"] in ("skipped (not configured)", "published")
+        assert res["publishing"]["linkedin"] in ("skipped (not configured)", "published", "draft_only (live publishing pending approval)")
         assert res["publishing"]["x"] == "manual"
 
         # Check manifest file written

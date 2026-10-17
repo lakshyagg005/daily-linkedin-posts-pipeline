@@ -230,6 +230,9 @@ class PersonalBrandOrchestrator:
                     manifest_data["publishing"]["linkedin_post_id"] = linkedin_publish_status.get("post_id")
                     manifest_data["publishing"]["linkedin_post_type"] = linkedin_publish_status.get("post_type")
                     print(f"✓ LinkedIn post confirmed ({linkedin_publish_status.get('post_id')}).")
+                elif pub_status == "safe_mode_draft_only":
+                    manifest_data["publishing"]["linkedin"] = "draft_only (live publishing pending approval)"
+                    print("✓ Post generated in draft mode (safety guard active: LINKEDIN_AUTO_PUBLISH_ENABLED=false).")
                 else:
                     manifest_data["publishing"]["linkedin"] = f"failed: {pub_status}"
             except Exception as e:
