@@ -216,7 +216,19 @@ jobs:
           # Check publish status file
           status_path = Path(f'content/linkedin/{today_str}/linkedin_publish_status.json')
           if not status_path.exists():
-              print('❌ LinkedIn publish status file not found. Publishing may have failed.')
+              manifest_path = Path(f'content/{today_str}/daily_manifest.json')
+              if manifest_path.exists():
+                  try:
+                      with open(manifest_path, 'r', encoding='utf-8') as mf:
+                          m = json.load(mf)
+                      m_status = m.get('publishing', {}).get('linkedin', '')
+                      print(f'ℹ Manifest records LinkedIn publishing status: \"{m_status}\"')
+                      if 'draft_only' in m_status or 'skipped' in m_status:
+                          print('  Draft-only or skipped publishing recorded in manifest. Exiting cleanly.')
+                          sys.exit(0)
+                  except Exception:
+                      pass
+              print(f'❌ LinkedIn publish status file not found: {status_path}. Publishing may have failed.')
               sys.exit(1)
 
           with open(status_path, 'r', encoding='utf-8') as f:
@@ -233,16 +245,24 @@ jobs:
               print(f'  • Post ID:         {post_id}')
               print(f'  • Post Type:       {post_type}')
               print(f'  • Carousel Status: {carousel_status}')
-          elif pub_status == 'safe_mode_draft_only':
-              print('🔒 [SAFETY GUARD ACTIVE]: Live LinkedIn publishing is paused pending user approval.')
+              sys.exit(0)
+          elif pub_status in ('safe_mode_draft_only', 'draft_only'):
+              print('🔒 [SAFETY GUARD ACTIVE / DRAFT-ONLY MODE]: Live LinkedIn publishing is paused.')
               print(f'  • Status:          {pub_status}')
+              print(f'  • Message:         {status.get("message", "Live publishing disabled.")}')
               print('  • Note:            Post and carousel PDF are preserved for manual upload/review.')
               print('  • To enable live:  Set LINKEDIN_AUTO_PUBLISH_ENABLED=true or trigger with publish_live=true.')
+              sys.exit(0)
+          elif pub_status == 'skipped_not_configured':
+              print('⚠ LinkedIn publishing skipped: LINKEDIN_ACCESS_TOKEN is missing or not configured.')
+              sys.exit(0)
           else:
-              print(f'❌ LinkedIn post publishing failed or incomplete.')
+              print(f'❌ LinkedIn post publishing failed!')
               print(f'  • Status: {pub_status}')
-              print(f'  • Error:  {status.get("error")}')
-              # Non-fatal to preserve generated artifacts
+              print(f'  • Error:  {status.get("error") or status.get("message")}')
+              is_live = os.environ.get('LINKEDIN_AUTO_PUBLISH_ENABLED', '').lower() in ('true', '1', 'yes')
+              if is_live:
+                  sys.exit(1)
           "
 
       - name: Get Current Date

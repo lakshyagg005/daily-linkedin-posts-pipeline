@@ -147,6 +147,83 @@ def test_duplicate_topic_rejection():
             assert "No sufficiently novel topic found" in str(e)
 
 
+def test_orchestrator_with_linkedin_configured_draft_mode():
+    """Test 5: Token configured in draft mode writes linkedin_publish_status.json cleanly."""
+    from unittest.mock import patch
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_log_path = Path(tmpdir) / "test-log.json"
+        log = PersonalBrandLog(log_path=tmp_log_path)
+        mock_provider = LLMProvider(custom_caller=get_mock_valid_llm_response)
+
+        test_date = "2026-10-06"
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": "AQV_test_token_12345",
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "false",
+        }):
+            orchestrator = PersonalBrandOrchestrator(
+                date_str=test_date,
+                dry_run=False,
+                force=True,
+                skip_research=True,
+                skip_render=True,
+                provider=mock_provider,
+                dedup_log=log
+            )
+
+            res = orchestrator.execute_pipeline()
+
+            assert res["status"] == "success"
+            assert "draft_only" in res["publishing"]["linkedin"]
+
+            # Status file MUST exist and indicate safe_mode_draft_only
+            status_file = root_dir / "content" / "linkedin" / test_date / "linkedin_publish_status.json"
+            assert status_file.exists(), "linkedin_publish_status.json must be written in draft mode!"
+            with open(status_file, "r", encoding="utf-8") as f:
+                s_data = json.load(f)
+                assert s_data.get("status") == "safe_mode_draft_only"
+                assert "LINKEDIN_AUTO_PUBLISH_ENABLED" in s_data.get("message", "")
+
+
+def test_orchestrator_publishing_failure_records_status_file():
+    """Test 6: Publishing exception is recorded in status file and not confused with missing file."""
+    from unittest.mock import patch, MagicMock
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_log_path = Path(tmpdir) / "test-log.json"
+        log = PersonalBrandLog(log_path=tmp_log_path)
+        mock_provider = LLMProvider(custom_caller=get_mock_valid_llm_response)
+
+        test_date = "2026-10-07"
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": "AQV_test_token_12345",
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
+            orchestrator = PersonalBrandOrchestrator(
+                date_str=test_date,
+                dry_run=False,
+                force=True,
+                skip_research=True,
+                skip_render=True,
+                provider=mock_provider,
+                dedup_log=log
+            )
+            # Mock publisher to raise an exception during publish
+            orchestrator.linkedin_publisher.publish_daily_package = MagicMock(
+                side_effect=RuntimeError("Simulated LinkedIn API network outage")
+            )
+
+            res = orchestrator.execute_pipeline()
+
+            assert "failed" in res["publishing"]["linkedin"]
+
+            # Status file MUST exist and accurately describe the failure
+            status_file = root_dir / "content" / "linkedin" / test_date / "linkedin_publish_status.json"
+            assert status_file.exists(), "linkedin_publish_status.json must exist even on exception!"
+            with open(status_file, "r", encoding="utf-8") as f:
+                s_data = json.load(f)
+                assert s_data.get("status") == "failed_exception"
+                assert "Simulated LinkedIn API network outage" in s_data.get("error", "")
+
+
 def run_all_tests():
     print("Running Personal Brand Master Orchestrator Test Suite...")
     test_dry_run_behavior()
@@ -157,6 +234,10 @@ def run_all_tests():
     print("  ✓ Test 3: Mocked E2E pipeline, manifest & log update passed")
     test_duplicate_topic_rejection()
     print("  ✓ Test 4: Duplicate topic rejection passed")
+    test_orchestrator_with_linkedin_configured_draft_mode()
+    print("  ✓ Test 5: Configured token in draft mode status file passed")
+    test_orchestrator_publishing_failure_records_status_file()
+    print("  ✓ Test 6: Publishing failure status file recording passed")
     print("\nALL ORCHESTRATOR TESTS PASSED SUCCESSFULLY! 🎉")
 
 

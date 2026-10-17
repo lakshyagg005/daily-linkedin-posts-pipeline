@@ -452,21 +452,29 @@ class LinkedInPublisher:
         existing = self.check_already_published(date_str)
         if existing:
             print(f"  ✓ LinkedIn post for {date_str} already published ({existing.get('post_id')}). Skipping duplicate.")
-            return {
+            already_status = {
+                "date": date_str,
                 "status": "already_published",
                 "post_id": existing.get("post_id"),
-                "post_type": existing.get("post_type"),
-                "carousel_status": existing.get("carousel_status"),
-                "timestamp": existing.get("timestamp"),
+                "post_type": existing.get("post_type", "text_post"),
+                "carousel_status": existing.get("carousel_status", "unknown"),
+                "timestamp": existing.get("timestamp") or datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
+            self._save_publish_status(date_str, already_status)
+            return already_status
 
         # Step 2: Check configuration
         if not self.is_configured() and not self.dry_run:
             print("  ⚠ LinkedIn API token (LINKEDIN_ACCESS_TOKEN) not configured.")
-            return {
+            not_conf_status = {
+                "date": date_str,
                 "status": "skipped_not_configured",
                 "error": "LINKEDIN_ACCESS_TOKEN is missing",
+                "message": "LINKEDIN_ACCESS_TOKEN is missing or not configured.",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
+            self._save_publish_status(date_str, not_conf_status)
+            return not_conf_status
 
         # Step 2b: Safety guard — check if live publishing is explicitly approved
         if not self.is_auto_publish_enabled() and not self.dry_run:

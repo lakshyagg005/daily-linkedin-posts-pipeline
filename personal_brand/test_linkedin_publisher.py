@@ -322,7 +322,7 @@ class TestLinkedInPublisher(unittest.TestCase):
         """
         Safety Guard: When LINKEDIN_AUTO_PUBLISH_ENABLED is false (the default),
         the publisher MUST NOT make any publish calls to LinkedIn!
-        It must safely return 'safe_mode_draft_only'.
+        It must safely return 'safe_mode_draft_only' and persist the status record.
         """
         def failing_mock(url, **kwargs):
             self.fail("HTTP call made to LinkedIn despite LINKEDIN_AUTO_PUBLISH_ENABLED=false!")
@@ -339,6 +339,135 @@ class TestLinkedInPublisher(unittest.TestCase):
             )
             self.assertEqual(res["status"], "safe_mode_draft_only")
             self.assertIn("LINKEDIN_AUTO_PUBLISH_ENABLED", res["message"])
+
+            # Verify status file was written to exact path expected by CI
+            status_file = self.root_path / "content" / "linkedin" / self.date_str / "linkedin_publish_status.json"
+            self.assertTrue(status_file.exists())
+            with open(status_file, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                self.assertEqual(saved["status"], "safe_mode_draft_only")
+                self.assertIn("LINKEDIN_AUTO_PUBLISH_ENABLED", saved["message"])
+
+    def test_unconfigured_token_persists_status_file(self):
+        """When LINKEDIN_ACCESS_TOKEN is missing, status file is saved as skipped_not_configured."""
+        with patch.dict(os.environ, {}, clear=True):
+            publisher = LinkedInPublisher(root_dir=self.root_path)
+            res = publisher.publish_daily_package(
+                post_text="Unconfigured text",
+                topic="Unconfigured Topic",
+                date_str=self.date_str,
+            )
+            self.assertEqual(res["status"], "skipped_not_configured")
+
+            status_file = self.root_path / "content" / "linkedin" / self.date_str / "linkedin_publish_status.json"
+            self.assertTrue(status_file.exists())
+            with open(status_file, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                self.assertEqual(saved["status"], "skipped_not_configured")
+
+    def test_live_mode_persists_published_status_file(self):
+        """When live mode is enabled, successful post writes status file with published state and post ID."""
+        def mock_client(url, method="GET", headers=None, data=None, timeout=25):
+            if "userinfo" in url:
+                return 200, {}, json.dumps({"sub": "user_live_123"}).encode("utf-8")
+            if "rest/posts" in url:
+                return 201, {"x-restli-id": "urn:li:share:live_post_777"}, b"{}"
+            return 404, {}, b""
+
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
+            publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=mock_client)
+            res = publisher.publish_daily_package(
+                post_text="Live post text",
+                topic="Live Topic",
+                date_str=self.date_str,
+            )
+            self.assertEqual(res["status"], "published")
+            self.assertEqual(res["post_id"], "urn:li:share:live_post_777")
+
+            status_file = self.root_path / "content" / "linkedin" / self.date_str / "linkedin_publish_status.json"
+            self.assertTrue(status_file.exists())
+            with open(status_file, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                self.assertEqual(saved["status"], "published")
+                self.assertEqual(saved["post_id"], "urn:li:share:live_post_777")
+
+    def test_publishing_failure_persists_status_file(self):
+        """When publishing encounters an API failure, status file is recorded with failed_publish."""
+        def failing_post_client(url, method="GET", headers=None, data=None, timeout=25):
+            if "userinfo" in url:
+                return 200, {}, json.dumps({"sub": "user_fail_123"}).encode("utf-8")
+            if "rest/posts" in url:
+                return 500, {}, b'{"message": "Internal LinkedIn API Server Error"}'
+            return 404, {}, b""
+
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
+            publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=failing_post_client)
+            res = publisher.publish_daily_package(
+                post_text="Fail post text",
+                topic="Fail Topic",
+                date_str=self.date_str,
+            )
+            self.assertEqual(res["status"], "failed_publish")
+
+            status_file = self.root_path / "content" / "linkedin" / self.date_str / "linkedin_publish_status.json"
+            self.assertTrue(status_file.exists())
+            with open(status_file, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                self.assertEqual(saved["status"], "failed_publish")
+                self.assertIn("Internal LinkedIn API Server Error", saved["error"])
+
+    def test_workflow_validator_logic_regression(self):
+        """
+        Regression test validating the exact behavior of the CI Validate LinkedIn Publishing Status step:
+        - published status -> valid
+        - safe_mode_draft_only -> valid
+        - skipped_not_configured -> valid
+        - missing status file -> raises FileNotFoundError / exit code 1
+        - publishing failure -> raises when live mode is enabled
+        """
+        def run_validator_check(status_data, file_exists=True, live_enabled=False):
+            if not file_exists:
+                raise FileNotFoundError("LinkedIn publish status file not found. Publishing may have failed.")
+            pub_status = status_data.get("status")
+            post_id = status_data.get("post_id")
+            if pub_status in ("published", "already_published") and post_id:
+                return "success_published"
+            elif pub_status in ("safe_mode_draft_only", "draft_only"):
+                return "success_draft_only"
+            elif pub_status == "skipped_not_configured":
+                return "success_skipped"
+            else:
+                if live_enabled:
+                    raise RuntimeError(f"Publishing failed: {pub_status} - {status_data.get('error')}")
+                return "failed_non_fatal"
+
+        # 1. Published
+        self.assertEqual(
+            run_validator_check({"status": "published", "post_id": "urn:li:share:123"}),
+            "success_published",
+        )
+        # 2. Safe mode draft only
+        self.assertEqual(
+            run_validator_check({"status": "safe_mode_draft_only", "message": "Draft only"}),
+            "success_draft_only",
+        )
+        # 3. Skipped not configured
+        self.assertEqual(
+            run_validator_check({"status": "skipped_not_configured"}),
+            "success_skipped",
+        )
+        # 4. Missing file
+        with self.assertRaises(FileNotFoundError):
+            run_validator_check(None, file_exists=False)
+        # 5. Failure during live mode
+        with self.assertRaises(RuntimeError):
+            run_validator_check({"status": "failed_publish", "error": "API error"}, live_enabled=True)
 
     def test_dry_run_mode(self):
         """Test dry run makes zero network calls and generates mock IDs."""

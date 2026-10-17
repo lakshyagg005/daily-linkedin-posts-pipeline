@@ -216,11 +216,26 @@ class PersonalBrandOrchestrator:
         if carousel_res.get("pdf_file"):
             pdf_file_path = Path(carousel_res["pdf_file"])
 
+        linkedin_pkg = content_pkg.get("linkedin", {}) if isinstance(content_pkg, dict) else {}
+        post_text = (
+            linkedin_pkg.get("caption")
+            or linkedin_pkg.get("text")
+            or ""
+        )
+        if not post_text and "linkedin_md" in artifact_paths and Path(artifact_paths["linkedin_md"]).exists():
+            raw_md = Path(artifact_paths["linkedin_md"]).read_text(encoding="utf-8")
+            if "---" in raw_md:
+                post_text = raw_md.split("---", 1)[1].strip()
+            else:
+                post_text = raw_md.strip()
+
+        topic_str = content_pkg.get("topic", "Daily Topic") if isinstance(content_pkg, dict) else "Daily Topic"
+
         if self.linkedin_publisher.is_configured() or self.dry_run:
             try:
                 linkedin_publish_status = self.linkedin_publisher.publish_daily_package(
-                    post_text=content_pkg["linkedin"]["text"],
-                    topic=content_pkg["topic"],
+                    post_text=post_text,
+                    topic=topic_str,
                     date_str=self.date_str,
                     carousel_pdf_path=pdf_file_path,
                 )
@@ -239,10 +254,26 @@ class PersonalBrandOrchestrator:
                 sanitized = self.linkedin_publisher._sanitize_error(e)
                 print(f"❌ [LINKEDIN PUBLISHING FAILED]: {sanitized}")
                 manifest_data["publishing"]["linkedin"] = f"failed: {sanitized}"
+                linkedin_publish_status = {
+                    "date": self.date_str,
+                    "status": "failed_exception",
+                    "error": sanitized,
+                    "pdf_file": str(pdf_file_path) if pdf_file_path else None,
+                    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                }
+                self.linkedin_publisher._save_publish_status(self.date_str, linkedin_publish_status)
         else:
             print("  ⚠ LinkedIn API token (LINKEDIN_ACCESS_TOKEN) not configured.")
             print("    Skipping automated LinkedIn publishing. Content is saved for manual upload.")
             manifest_data["publishing"]["linkedin"] = "skipped (not configured)"
+            linkedin_publish_status = {
+                "date": self.date_str,
+                "status": "skipped_not_configured",
+                "message": "LINKEDIN_ACCESS_TOKEN is missing or not configured.",
+                "pdf_file": str(pdf_file_path) if pdf_file_path else None,
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+            self.linkedin_publisher._save_publish_status(self.date_str, linkedin_publish_status)
 
         # Update manifest with final publishing status
         with open(self.manifest_path, "w", encoding="utf-8") as f:
