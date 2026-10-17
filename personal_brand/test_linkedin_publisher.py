@@ -424,50 +424,61 @@ class TestLinkedInPublisher(unittest.TestCase):
 
     def test_workflow_validator_logic_regression(self):
         """
-        Regression test validating the exact behavior of the CI Validate LinkedIn Publishing Status step:
+        Regression test validating the exact behavior of validate_linkedin_status:
         - published status -> valid
         - safe_mode_draft_only -> valid
         - skipped_not_configured -> valid
-        - missing status file -> raises FileNotFoundError / exit code 1
-        - publishing failure -> raises when live mode is enabled
+        - missing status file -> returns failure / exit code 1
+        - publishing failure -> returns failure when live mode is enabled
         """
-        def run_validator_check(status_data, file_exists=True, live_enabled=False):
-            if not file_exists:
-                raise FileNotFoundError("LinkedIn publish status file not found. Publishing may have failed.")
-            pub_status = status_data.get("status")
-            post_id = status_data.get("post_id")
-            if pub_status in ("published", "already_published") and post_id:
-                return "success_published"
-            elif pub_status in ("safe_mode_draft_only", "draft_only"):
-                return "success_draft_only"
-            elif pub_status == "skipped_not_configured":
-                return "success_skipped"
-            else:
-                if live_enabled:
-                    raise RuntimeError(f"Publishing failed: {pub_status} - {status_data.get('error')}")
-                return "failed_non_fatal"
+        from personal_brand.validate_linkedin_status import validate_linkedin_status
 
         # 1. Published
-        self.assertEqual(
-            run_validator_check({"status": "published", "post_id": "urn:li:share:123"}),
-            "success_published",
-        )
+        status_file = self.root_path / "content" / "linkedin" / self.date_str / "linkedin_publish_status.json"
+        status_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(status_file, "w", encoding="utf-8") as f:
+            json.dump({"status": "published", "post_id": "urn:li:share:123"}, f)
+
+        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+            ok, msg, res = validate_linkedin_status(date_str=self.date_str, root_dir=self.root_path)
+            self.assertTrue(ok)
+            self.assertEqual(res["status"], "published")
+
         # 2. Safe mode draft only
-        self.assertEqual(
-            run_validator_check({"status": "safe_mode_draft_only", "message": "Draft only"}),
-            "success_draft_only",
-        )
+        with open(status_file, "w", encoding="utf-8") as f:
+            json.dump({"status": "safe_mode_draft_only", "message": "Draft only"}, f)
+
+        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+            ok, msg, res = validate_linkedin_status(date_str=self.date_str, root_dir=self.root_path)
+            self.assertTrue(ok)
+            self.assertEqual(res["status"], "safe_mode_draft_only")
+
         # 3. Skipped not configured
-        self.assertEqual(
-            run_validator_check({"status": "skipped_not_configured"}),
-            "success_skipped",
-        )
+        with patch.dict(os.environ, {}, clear=True):
+            ok, msg, res = validate_linkedin_status(date_str=self.date_str, root_dir=self.root_path)
+            self.assertTrue(ok)
+            self.assertEqual(res["status"], "skipped_not_configured")
+
         # 4. Missing file
-        with self.assertRaises(FileNotFoundError):
-            run_validator_check(None, file_exists=False)
+        status_file.unlink()
+        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+            ok, msg, _ = validate_linkedin_status(date_str=self.date_str, root_dir=self.root_path)
+            self.assertFalse(ok)
+
         # 5. Failure during live mode
-        with self.assertRaises(RuntimeError):
-            run_validator_check({"status": "failed_publish", "error": "API error"}, live_enabled=True)
+        with open(status_file, "w", encoding="utf-8") as f:
+            json.dump({"status": "failed_publish", "error": "API error"}, f)
+
+        with patch.dict(os.environ, {
+            "LINKEDIN_ACCESS_TOKEN": self.fake_token,
+            "LINKEDIN_AUTO_PUBLISH_ENABLED": "true",
+        }):
+            ok, msg, res = validate_linkedin_status(
+                date_str=self.date_str,
+                root_dir=self.root_path,
+                live_enabled=True,
+            )
+            self.assertFalse(ok)
 
     def test_dry_run_mode(self):
         """Test dry run makes zero network calls and generates mock IDs."""
