@@ -239,6 +239,70 @@ class TestLinkedInPublisher(unittest.TestCase):
             # Should have called userinfo (1) + post (1), no retries
             self.assertEqual(call_count, 2)
 
+    def test_persistent_dedup_via_personal_brand_log(self):
+        """
+        Verify that publishing status persists across separate scheduled GitHub Actions runs.
+        Even if the local runner's status file does NOT exist (fresh checkout on ephemeral runner),
+        the committed PersonalBrandLog must block duplicate publishing!
+        """
+        from personal_brand.deduplication import PersonalBrandLog
+        tmp_log_file = self.root_path / "personal-brand-log.json"
+        dedup_log = PersonalBrandLog(log_path=tmp_log_file)
+        dedup_log.mark_linkedin_published(
+            date_str=self.date_str,
+            post_id="urn:li:share:persisted_from_earlier_run_999",
+            post_type="document_carousel",
+            carousel_status="published",
+        )
+
+        def failing_mock(url, **kwargs):
+            self.fail("HTTP call made despite post already being recorded in persistent log!")
+
+        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+            publisher = LinkedInPublisher(
+                root_dir=self.root_path,
+                custom_http_client=failing_mock,
+                dedup_log=dedup_log,
+            )
+            res = publisher.publish_daily_package(
+                post_text="New text attempt",
+                topic="Same Day Retry Topic",
+                date_str=self.date_str,
+            )
+
+            self.assertEqual(res["status"], "already_published")
+            self.assertEqual(res["post_id"], "urn:li:share:persisted_from_earlier_run_999")
+
+    def test_ambiguous_network_timeout_no_blind_retry(self):
+        """
+        When a network timeout occurs on POST /rest/posts, the publisher MUST NOT blindly retry.
+        A blind retry could cause a duplicate post if LinkedIn received the first request.
+        """
+        post_calls = 0
+
+        def timeout_mock(url, method="GET", headers=None, data=None, timeout=25):
+            nonlocal post_calls
+            if "userinfo" in url:
+                return 200, {}, json.dumps({"sub": "user_123"}).encode("utf-8")
+            if "rest/posts" in url:
+                post_calls += 1
+                raise TimeoutError("Socket read timed out while waiting for LinkedIn server")
+            return 404, {}, b""
+
+        with patch.dict(os.environ, {"LINKEDIN_ACCESS_TOKEN": self.fake_token}):
+            publisher = LinkedInPublisher(root_dir=self.root_path, custom_http_client=timeout_mock)
+            res = publisher.publish_daily_package(
+                post_text="Text",
+                topic="Topic",
+                date_str=self.date_str,
+            )
+
+            self.assertEqual(res["status"], "failed_publish")
+            self.assertIn("Ambiguous network timeout", res["error"])
+            self.assertIn("Blind retry halted", res["error"])
+            # Verified: Exactly ONE POST call was attempted. Zero blind retries!
+            self.assertEqual(post_calls, 1)
+
     def test_dry_run_mode(self):
         """Test dry run makes zero network calls and generates mock IDs."""
         publisher = LinkedInPublisher(dry_run=True, root_dir=self.root_path)

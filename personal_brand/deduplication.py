@@ -211,3 +211,45 @@ class PersonalBrandLog:
                 return True, entry, max(score, 0.7 if phrase_overlap else score)
 
         return False, None, 0.0
+
+    def get_entry_for_date(self, date_str: str) -> Optional[Dict[str, Any]]:
+        """Return the logged entry for a specific date if it exists."""
+        for entry in self.data.get("entries", []):
+            if entry.get("date") == date_str:
+                return entry
+        return None
+
+    def mark_linkedin_published(
+        self,
+        date_str: str,
+        post_id: str,
+        post_type: str = "text_post",
+        carousel_status: str = "none",
+    ) -> bool:
+        """
+        Record successful LinkedIn publication on the date's entry and persist to log file.
+        Ensures publishing status persists across separate scheduled GitHub Actions runs.
+        """
+        for entry in self.data.get("entries", []):
+            if entry.get("date") == date_str:
+                entry["linkedin_published"] = True
+                entry["linkedin_post_id"] = post_id
+                entry["linkedin_post_type"] = post_type
+                entry["carousel_status"] = carousel_status
+                entry["linkedin_published_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                self.save()
+                return True
+
+        # Minimal fallback entry if none existed yet
+        new_entry = {
+            "date": date_str,
+            "topic": "Daily Personal Brand Post",
+            "linkedin_published": True,
+            "linkedin_post_id": post_id,
+            "linkedin_post_type": post_type,
+            "carousel_status": carousel_status,
+            "linkedin_published_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        self.data.setdefault("entries", []).append(new_entry)
+        self.save()
+        return True

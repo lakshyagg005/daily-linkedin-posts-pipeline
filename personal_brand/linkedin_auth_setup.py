@@ -91,8 +91,12 @@ def main():
         print("   to generate an Access Token with 'w_member_social' and 'openid, profile'.")
         print("5. Paste your access token below (or set LINKEDIN_ACCESS_TOKEN in .env):\n")
 
+        import getpass
         try:
-            entered_token = input("Enter LINKEDIN_ACCESS_TOKEN (or press Enter to exit): ").strip()
+            entered_token = getpass.getpass("Enter LINKEDIN_ACCESS_TOKEN (input will be hidden): ").strip()
+            if not entered_token:
+                # Fallback if getpass is not on a tty
+                entered_token = input("Enter LINKEDIN_ACCESS_TOKEN (or press Enter to exit): ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\nExiting.")
             sys.exit(0)
@@ -103,28 +107,38 @@ def main():
         token = entered_token
 
     masked_token = f"{token[:6]}...{token[-4:]}" if len(token) > 10 else "***"
-    print(f"\n[1/2] Verifying token ({masked_token}) with LinkedIn API...")
+    print(f"\n[1/2] Verifying token ({masked_token}) with LinkedIn API (READ-ONLY check)...")
 
     result = verify_linkedin_token(token)
 
     if result.get("valid"):
         print("\n✅ TOKEN VERIFICATION SUCCEEDED!")
-        print(f"  • Member Name: {result.get('name')}")
-        print(f"  • Member Email: {result.get('email')}")
-        print(f"  • Member ID (sub): {result.get('sub')}")
-        print(f"  • Author URN: {result.get('person_urn')}")
+        print(f"  • Member Name:      {result.get('name')}")
+        print(f"  • Member Email:     {result.get('email')}")
+        print(f"  • Member ID (sub):  {result.get('sub')}")
+        print(f"  • Author URN:       {result.get('person_urn')}")
+        print("\n  [SECURITY NOTICE]:")
+        print("  • Token verified using read-only /v2/userinfo endpoint.")
+        print("  • Zero posts or public actions were created on your LinkedIn profile.")
 
         env_path = ROOT_DIR / ".env"
         if env_path.exists():
             existing_content = env_path.read_text(encoding="utf-8")
             if "LINKEDIN_ACCESS_TOKEN=" not in existing_content:
-                with open(env_path, "a", encoding="utf-8") as f:
-                    f.write(f"\n# LinkedIn API Credentials (60-day token)\n")
-                    f.write(f"LINKEDIN_ACCESS_TOKEN={token}\n")
-                    f.write(f"LINKEDIN_PERSON_URN={result.get('person_urn')}\n")
-                print(f"\n✓ Saved LINKEDIN_ACCESS_TOKEN and LINKEDIN_PERSON_URN to {env_path}")
+                try:
+                    save_choice = input(f"\nDo you want to save this verified token to your local {env_path.name}? [y/N]: ").strip().lower()
+                except (KeyboardInterrupt, EOFError):
+                    save_choice = "n"
+                if save_choice in ("y", "yes"):
+                    with open(env_path, "a", encoding="utf-8") as f:
+                        f.write(f"\n# LinkedIn API Credentials (60-day token)\n")
+                        f.write(f"LINKEDIN_ACCESS_TOKEN={token}\n")
+                        f.write(f"LINKEDIN_PERSON_URN={result.get('person_urn')}\n")
+                    print(f"✓ Saved LINKEDIN_ACCESS_TOKEN and LINKEDIN_PERSON_URN to {env_path}")
+                else:
+                    print(f"✓ Token NOT saved to {env_path.name} (as chosen).")
             else:
-                print(f"\nNote: {env_path} already contains LINKEDIN_ACCESS_TOKEN entry.")
+                print(f"\nNote: {env_path} already contains a LINKEDIN_ACCESS_TOKEN entry.")
         print("\nNext step: Add LINKEDIN_ACCESS_TOKEN and LINKEDIN_PERSON_URN to GitHub Secrets.")
     else:
         print("\n❌ TOKEN VERIFICATION FAILED!")

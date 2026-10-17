@@ -51,7 +51,11 @@ class PersonalBrandOrchestrator:
         self.dedup_log = dedup_log or PersonalBrandLog()
         self.provider = provider or LLMProvider()
         self.post_generator = PostGenerator(provider=self.provider, dedup_log=self.dedup_log)
-        self.linkedin_publisher = LinkedInPublisher(dry_run=self.dry_run, root_dir=self.root_dir)
+        self.linkedin_publisher = LinkedInPublisher(
+            dry_run=self.dry_run,
+            root_dir=self.root_dir,
+            dedup_log=self.dedup_log,
+        )
 
     def _check_output_protection(self) -> None:
         """Prevent accidental overwriting of existing daily output unless force=True."""

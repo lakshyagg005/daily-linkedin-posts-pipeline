@@ -57,11 +57,13 @@ class LinkedInPublisher:
         root_dir: Optional[Path] = None,
         api_version: str = DEFAULT_API_VERSION,
         custom_http_client: Optional[Callable[..., Any]] = None,
+        dedup_log: Optional[Any] = None,
     ):
         self.dry_run = dry_run
         self.root_dir = root_dir or Path(__file__).resolve().parent.parent
         self.api_version = os.environ.get("LINKEDIN_API_VERSION", api_version)
         self.custom_http_client = custom_http_client
+        self.dedup_log = dedup_log
         self.env_vars = load_env_file()
 
         # Cached author person URN
@@ -184,19 +186,32 @@ class LinkedInPublisher:
     def check_already_published(self, date_str: str) -> Optional[Dict[str, Any]]:
         """
         Checks whether content for date_str was already successfully published to LinkedIn.
-        Prevents duplicate posting across retries or reruns.
+        Prevents duplicate posting across retries or separate scheduled workflow reruns.
         """
+        # Check 1: Date-specific status file on runner
         status_path = self._get_status_file_path(date_str)
-        if not status_path.exists():
-            return None
+        if status_path.exists():
+            try:
+                with open(status_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("status") == "published" and data.get("post_id"):
+                    return data
+            except Exception:
+                pass
 
-        try:
-            with open(status_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if data.get("status") == "published" and data.get("post_id"):
-                return data
-        except Exception:
-            return None
+        # Check 2: Committed deduplication log (personal-brand-log.json)
+        # Guarantees state persistence across separate scheduled GitHub Actions runs
+        if self.dedup_log and hasattr(self.dedup_log, "get_entry_for_date"):
+            entry = self.dedup_log.get_entry_for_date(date_str)
+            if entry and (entry.get("linkedin_published") or entry.get("linkedin_post_id")):
+                return {
+                    "date": date_str,
+                    "status": "published",
+                    "post_id": entry.get("linkedin_post_id"),
+                    "post_type": entry.get("linkedin_post_type", "text_post"),
+                    "carousel_status": entry.get("carousel_status", "unknown"),
+                    "timestamp": entry.get("linkedin_published_at", ""),
+                }
         return None
 
     def _save_publish_status(self, date_str: str, status_data: Dict[str, Any]) -> None:
@@ -364,13 +379,15 @@ class LinkedInPublisher:
                     data=data_bytes,
                 )
             except Exception as e:
-                # Network failure / timeout: do not blindly retry if state is ambiguous
+                # Ambiguous network timeout / exception:
+                # DO NOT blindly retry a POST request. The request may already have
+                # reached LinkedIn's servers and been processed. Blind retry risks
+                # publishing a duplicate post.
                 err_sanitized = self._sanitize_error(e)
-                if attempt == max_attempts:
-                    return False, None, f"Network exception during publish: {err_sanitized}"
-                time.sleep(backoff_delay)
-                backoff_delay *= 2
-                continue
+                return False, None, (
+                    f"Ambiguous network timeout/exception on POST /rest/posts: {err_sanitized}. "
+                    "Blind retry halted to prevent duplicate publication."
+                )
 
             # Success
             if status in (200, 201):
@@ -517,6 +534,16 @@ class LinkedInPublisher:
                 "timestamp": timestamp_str,
             }
             self._save_publish_status(date_str, final_status)
+
+            # Persist to committed deduplication log so status survives ephemeral runner teardown
+            if self.dedup_log and hasattr(self.dedup_log, "mark_linkedin_published"):
+                self.dedup_log.mark_linkedin_published(
+                    date_str=date_str,
+                    post_id=post_id,
+                    post_type=final_status["post_type"],
+                    carousel_status=final_status["carousel_status"],
+                )
+
             print(f"  ✅ LinkedIn Post Published Successfully!")
             print(f"     Post ID:   {post_id}")
             print(f"     Type:      {final_status['post_type']}")
