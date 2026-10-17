@@ -5,6 +5,8 @@ secrets/
 credentials/
 *.key
 *.log
+x_tokens.json
+linkedin_tokens.json
 
 # Output & temp directories
 carousel-routine/temp/

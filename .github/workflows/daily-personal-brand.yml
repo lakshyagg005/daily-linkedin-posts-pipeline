@@ -28,6 +28,8 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+      LINKEDIN_PERSON_URN: ${{ secrets.LINKEDIN_PERSON_URN }}
 
     steps:
       - name: Checkout Repository
@@ -184,6 +186,51 @@ jobs:
           print('✅ ALL PIPELINE OUTPUT VALIDATIONS PASSED SUCCESSFULLY!')
           "
 
+      - name: Validate LinkedIn Publishing Status
+        run: |
+          python3 -c "
+          import os, sys, json
+          from pathlib import Path
+          from datetime import date
+
+          today_str = date.today().isoformat()
+          print(f'Checking LinkedIn publishing status for date: {today_str}')
+
+          # Check if LinkedIn API token is configured
+          linkedin_token = os.environ.get('LINKEDIN_ACCESS_TOKEN')
+
+          if not linkedin_token:
+              print('⚠ LINKEDIN_ACCESS_TOKEN not configured. Automated LinkedIn publishing was skipped.')
+              print('  To enable: generate your 60-day token and add LINKEDIN_ACCESS_TOKEN as a GitHub Secret.')
+              sys.exit(0)
+
+          # Check publish status file
+          status_path = Path(f'content/linkedin/{today_str}/linkedin_publish_status.json')
+          if not status_path.exists():
+              print('❌ LinkedIn publish status file not found. Publishing may have failed.')
+              sys.exit(1)
+
+          with open(status_path, 'r', encoding='utf-8') as f:
+              status = json.load(f)
+
+          pub_status = status.get('status')
+          post_id = status.get('post_id')
+          post_type = status.get('post_type')
+          carousel_status = status.get('carousel_status')
+
+          if pub_status in ('published', 'already_published') and post_id:
+              print(f'✅ LinkedIn post verified successfully!')
+              print(f'  • Status:          {pub_status}')
+              print(f'  • Post ID:         {post_id}')
+              print(f'  • Post Type:       {post_type}')
+              print(f'  • Carousel Status: {carousel_status}')
+          else:
+              print(f'❌ LinkedIn post publishing failed or incomplete.')
+              print(f'  • Status: {pub_status}')
+              print(f'  • Error:  {status.get(\"error\")}')
+              # Non-fatal to preserve generated artifacts
+          "
+
       - name: Get Current Date
         id: date
         run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
@@ -195,6 +242,7 @@ jobs:
           retention-days: 7
           path: |
             content/linkedin/*/*.md
+            content/linkedin/*/*.json
             content/x/*/*.md
             content/x/*/*.json
             content/*/*.json

@@ -5,7 +5,11 @@ Master Daily Orchestrator for Lakshya's Personal Brand Content Pipeline.
 Coordinates:
 Research -> Deduplication -> LLM Content Generation -> Carousel Spec ->
 HTML Slide Generation -> Puppeteer PNG Rendering -> PDF Stitching ->
-Manifest Export -> Topic Log Persistence.
+Manifest Export -> Topic Log Persistence -> LinkedIn Auto-Publishing.
+
+LinkedIn is the ONLY auto-publishing platform.
+X (Twitter) posts are generated for editorial drafting and validation only,
+and are never published to X.
 """
 
 from pathlib import Path
@@ -18,6 +22,7 @@ from .deduplication import PersonalBrandLog
 from .research import generate_research_candidates, save_research_artifacts, create_research_candidate
 from .post_generator import PostGenerator, LLMProvider
 from .carousel_builder import CarouselBuilder
+from .linkedin_publisher import LinkedInPublisher
 
 
 class PersonalBrandOrchestrator:
@@ -46,6 +51,7 @@ class PersonalBrandOrchestrator:
         self.dedup_log = dedup_log or PersonalBrandLog()
         self.provider = provider or LLMProvider()
         self.post_generator = PostGenerator(provider=self.provider, dedup_log=self.dedup_log)
+        self.linkedin_publisher = LinkedInPublisher(dry_run=self.dry_run, root_dir=self.root_dir)
 
     def _check_output_protection(self) -> None:
         """Prevent accidental overwriting of existing daily output unless force=True."""
@@ -167,7 +173,7 @@ class PersonalBrandOrchestrator:
             print("  [SKIPPED] Carousel rendering skipped via --skip-render.")
 
         # Step 6: Create Daily Manifest
-        print("\n[STEP 5/6] Creating Daily Manifest...")
+        print("\n[STEP 5/7] Creating Daily Manifest...")
         self.daily_dir.mkdir(parents=True, exist_ok=True)
         manifest_data = {
             "date": self.date_str,
@@ -189,7 +195,7 @@ class PersonalBrandOrchestrator:
                 "carousel": "passed" if not self.skip_render else "skipped"
             },
             "publishing": {
-                "linkedin": "manual",
+                "linkedin": "pending",
                 "x": "manual"
             }
         }
@@ -199,7 +205,45 @@ class PersonalBrandOrchestrator:
 
         print(f"✓ Saved Daily Manifest: {self.manifest_path}")
 
-        print("\n[STEP 6/6] Pipeline Status Verified.")
+        # Step 7: Publish to LinkedIn via Official REST API
+        print("\n[STEP 6/7] Publishing to LinkedIn via Official REST API...")
+        linkedin_publish_status = {}
+        pdf_file_path = None
+        if carousel_res.get("pdf_file"):
+            pdf_file_path = Path(carousel_res["pdf_file"])
+
+        if self.linkedin_publisher.is_configured() or self.dry_run:
+            try:
+                linkedin_publish_status = self.linkedin_publisher.publish_daily_package(
+                    post_text=content_pkg["linkedin"]["text"],
+                    topic=content_pkg["topic"],
+                    date_str=self.date_str,
+                    carousel_pdf_path=pdf_file_path,
+                )
+                pub_status = linkedin_publish_status.get("status")
+                if pub_status in ("published", "already_published"):
+                    manifest_data["publishing"]["linkedin"] = "published"
+                    manifest_data["publishing"]["linkedin_post_id"] = linkedin_publish_status.get("post_id")
+                    manifest_data["publishing"]["linkedin_post_type"] = linkedin_publish_status.get("post_type")
+                    print(f"✓ LinkedIn post confirmed ({linkedin_publish_status.get('post_id')}).")
+                else:
+                    manifest_data["publishing"]["linkedin"] = f"failed: {pub_status}"
+            except Exception as e:
+                sanitized = self.linkedin_publisher._sanitize_error(e)
+                print(f"❌ [LINKEDIN PUBLISHING FAILED]: {sanitized}")
+                manifest_data["publishing"]["linkedin"] = f"failed: {sanitized}"
+        else:
+            print("  ⚠ LinkedIn API token (LINKEDIN_ACCESS_TOKEN) not configured.")
+            print("    Skipping automated LinkedIn publishing. Content is saved for manual upload.")
+            manifest_data["publishing"]["linkedin"] = "skipped (not configured)"
+
+        # Update manifest with final publishing status
+        with open(self.manifest_path, "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f, indent=2, ensure_ascii=False)
+
+        manifest_data["linkedin_publish_status"] = linkedin_publish_status
+
+        print("\n[STEP 7/7] Pipeline Status Verified.")
         print("\n==================================================")
         print("🎉 PIPELINE EXECUTION COMPLETED SUCCESSFULLY!")
         print("==================================================")

@@ -96,7 +96,7 @@ def test_mocked_pipeline_e2e_and_manifest():
 
         assert res["status"] == "success"
         assert res["validation"]["content"] == "passed"
-        assert res["publishing"]["linkedin"] == "manual"
+        assert res["publishing"]["linkedin"] in ("skipped (not configured)", "published")
         assert res["publishing"]["x"] == "manual"
 
         # Check manifest file written
@@ -106,6 +106,7 @@ def test_mocked_pipeline_e2e_and_manifest():
             m_data = json.load(f)
             assert m_data["status"] == "success"
             assert "sk-or-" not in json.dumps(m_data)
+            assert m_data["publishing"]["x"] == "manual"
 
         # Check deduplication log updated
         assert len(log.data["entries"]) == 1

@@ -47,10 +47,11 @@ def main():
             print("\n[DRY RUN SUMMARY] Topic selected:", result.get("topic"))
         else:
             print("\n[SUCCESS SUMMARY]")
-            print("  • Topic:    ", result.get("topic"))
-            print("  • LinkedIn: ", result.get("linkedin_post"))
-            print("  • X Posts:  ", len(result.get("x_posts", [])), "posts generated")
-            print("  • PDF:      ", result.get("carousel", {}).get("pdf_file"))
+            print("  • Topic:           ", result.get("topic"))
+            print("  • LinkedIn:        ", result.get("linkedin_post"))
+            print("  • LinkedIn Status: ", result.get("publishing", {}).get("linkedin"))
+            print("  • X Posts:         ", len(result.get("x_posts", [])), "posts generated (drafts only)")
+            print("  • PDF:             ", result.get("carousel", {}).get("pdf_file"))
     except Exception as e:
         print(f"\n❌ Pipeline failed: {e}")
         sys.exit(1)
