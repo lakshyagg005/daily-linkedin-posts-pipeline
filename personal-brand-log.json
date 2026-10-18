@@ -213,6 +213,25 @@
           "source_type": "high_quality_journalism"
         }
       ]
+    },
+    {
+      "date": "2026-10-18",
+      "topic": "Meta removes language that raised scraping and AI training concerns",
+      "angle": "Impact of this technical shift on software builders and product strategy.",
+      "thesis": "A Meta spokesperson insisted that the updated terms did not reflect a change in the way Meta crawls the web.",
+      "linkedin_hook": "Meta Backtracks on AI Scraping Terms",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Meta removes language that raised scraping and AI training concerns",
+          "url": "https://techcrunch.com/2026/10/17/meta-removes-language-that-raised-scraping-and-ai-training-concerns/",
+          "source_type": "high_quality_journalism"
+        }
+      ]
     }
   ]
 }
