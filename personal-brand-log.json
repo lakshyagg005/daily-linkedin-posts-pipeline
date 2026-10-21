@@ -404,6 +404,25 @@
       "linkedin_post_type": "document_carousel",
       "carousel_status": "published",
       "linkedin_published_at": "2026-10-21T04:16:40.199453+00:00"
+    },
+    {
+      "date": "2026-10-21",
+      "topic": "Hugging Face CEO warns that Netflix’s OpenAI hack documentary isn’t accurate",
+      "angle": "Impact of this technical shift on software builders and product strategy.",
+      "thesis": "Before you share the Netflix documentary \"AI Gone Rogue,\" take note. Clem Delangue, Hugging Face's co-founder who is featured in the film, says it went \"full doomer mode\" and isn't accurate.",
+      "linkedin_hook": "Netflix's AI Documentary vs. Reality",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Hugging Face CEO warns that Netflix’s OpenAI hack documentary isn’t accurate",
+          "url": "https://techcrunch.com/2026/10/20/hugging-face-ceo-warns-that-netflixs-openai-hack-documentary-isnt-accurate/",
+          "source_type": "high_quality_journalism"
+        }
+      ]
     }
   ]
 }
