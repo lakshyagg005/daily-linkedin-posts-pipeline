@@ -380,6 +380,30 @@
           "source_type": "high_quality_journalism"
         }
       ]
+    },
+    {
+      "date": "2026-10-21",
+      "topic": "Anthropic pitches AI safety bill that may block a model if 50+ people could be killed",
+      "angle": "Impact of this technical shift on software builders and product strategy.",
+      "thesis": "The proposed policy seems to offer protections against AI run amok but actually forbids federal agencies from blocking a model's release without the permission of a judge.",
+      "linkedin_hook": "Anthropic's AI Safety Proposal",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Anthropic pitches AI safety bill that may block a model if 50+ people could be killed",
+          "url": "https://techcrunch.com/2026/10/20/anthropic-pitches-ai-safety-bill-that-may-block-a-model-if-50-people-could-be-killed/",
+          "source_type": "high_quality_journalism"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7518525639520411649",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-21T04:16:40.199453+00:00"
     }
   ]
 }
