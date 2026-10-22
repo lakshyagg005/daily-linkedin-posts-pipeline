@@ -38,7 +38,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
       LINKEDIN_PERSON_URN: ${{ secrets.LINKEDIN_PERSON_URN }}
-      LINKEDIN_AUTO_PUBLISH_ENABLED: ${{ vars.LINKEDIN_AUTO_PUBLISH_ENABLED || inputs.publish_live || 'false' }}
+      LINKEDIN_AUTO_PUBLISH_ENABLED: ${{ (github.event_name == 'schedule' && vars.LINKEDIN_AUTO_PUBLISH_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && (inputs.publish_live == true || inputs.publish_live == 'true')) }}
 
     steps:
       - name: Checkout Repository

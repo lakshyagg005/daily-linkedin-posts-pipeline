@@ -602,8 +602,12 @@ def validate_content_package(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
     if "founders wing" in raw_str or "founderswing" in raw_str or "prithal" in raw_str:
         errors.append("Content contains Founders Wing references.")
 
-    # Check Anti-AI-Slop words
-    found_slop = [w for w in BANNED_SLOP if w in raw_str]
+    # Check Anti-AI-Slop words in content (excluding metadata category fields)
+    content_dict = {k: v for k, v in data.items() if k != "category"}
+    if isinstance(data.get("carousel"), dict):
+        content_dict["carousel"] = {k: v for k, v in data["carousel"].items() if k != "category"}
+    content_raw_str = json.dumps(content_dict).lower()
+    found_slop = [w for w in BANNED_SLOP if w in content_raw_str]
     if found_slop:
         errors.append(f"Content contains banned AI slop words: {found_slop}")
 
@@ -641,11 +645,17 @@ Your goal is to write 1 LinkedIn post, 1 7-slide Carousel specification, and 3 X
 BANNED WORDS (STRICTLY FORBIDDEN - NEVER USE ANY OF THESE WORDS):
 "game changer", "game-changer", "revolutionary", "unlock", "leverage", "leverages", "10x", "future of work", "delve", "tapestry", "disruptive", "paradigm shift", "supercharge", "excited to share", "thought leader", "groundbreaking", "unprecedented", "synergy", "unleash", "transformative", "world-class", "journey", "ecosystem".
 
-CRITICAL SOURCE RULES:
+CRITICAL SOURCE & ECOSYSTEM RULES:
 1. Read the source carefully. If it is a PRE-EVENT ANNOUNCEMENT (e.g. speaker lineup, agenda preview, upcoming panel), do NOT write as if the event already happened. Use future tense: "will explore", "is set to discuss". NEVER say "highlighted", "revealed", "shared" if the talk hasn't happened yet.
 2. Only make factual claims that are DIRECTLY stated in the source material. Do NOT infer, extrapolate, or fabricate details not in the source.
 3. If the source mentions specific numbers, dollar amounts, partnerships, or milestones, USE THEM. They make content credible.
 4. Do NOT fabricate quotes. If the final_insight quote is not from a real person, do NOT wrap it in quotation marks. Present it as a plain takeaway statement.
+5. For REDDIT and community signal sources: Community discussions, debates, and posts reflect builder pain points, contrarian opinions, or sentiment—NOT verified factual reporting or corporate disclosures. Frame them as community observations, debates, or real-world friction points rather than audited corporate facts.
+6. TOPIC ECOSYSTEM COVERAGE:
+   - When covering Startups & Entrepreneurship: focus on founder lessons, pivots, launches, unit economics, and bootstrapping vs. venture dynamics.
+   - When covering Business & Strategy: analyze customer acquisition, pricing models, distribution moats, churn, and operational mechanics.
+   - When covering AI Business & Future of Work: focus on practical SaaS opportunities, commercial workflow transformation, and tools gaining real developer/enterprise traction.
+   - When covering AI & Technology: focus on technical architectures, model capabilities, developer tools, and infrastructure.
 
 LINKEDIN POST RULES:
 1. The caption MUST start with a strong hook line (question, surprising fact, or bold claim) that stops the scroll.
