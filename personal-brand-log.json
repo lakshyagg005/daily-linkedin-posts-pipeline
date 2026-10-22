@@ -442,6 +442,31 @@
           "source_type": "high_quality_journalism",
           "published_date": "Wed, 21 Oct 2026 22:51:22 +0000"
         }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7518921590684794881",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-22T06:30:02.470734+00:00"
+    },
+    {
+      "date": "2026-10-22",
+      "topic": "While Amazon blocks AI agents, Walmart rolls out the welcome mat",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "As Amazon blocks AI agents from shopping on its site, Walmart is taking the opposite approach, introducing new technology that lets AI agents make purchases on customers' behalf, with controls over spending and transaction approvals.",
+      "linkedin_hook": "Retail’s AI Crossroads",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "While Amazon blocks AI agents, Walmart rolls out the welcome mat",
+          "url": "https://techcrunch.com/2026/10/21/while-amazon-blocks-ai-agents-walmart-rolls-out-the-welcome-mat/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Wed, 21 Oct 2026 19:30:00 +0000"
+        }
       ]
     }
   ]
