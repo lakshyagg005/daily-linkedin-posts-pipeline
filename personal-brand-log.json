@@ -468,6 +468,26 @@
           "published_date": "Wed, 21 Oct 2026 19:30:00 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-10-22",
+      "topic": "PHP Armageddon: OpenAI, Google’s Wiz find ancient holes, panicking the internet",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "This is the kind of security issue that was found and prevented by AI, but is also a high risk because of AI.",
+      "linkedin_hook": "Ancient PHP bugs resurfaced by AI",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "PHP Armageddon: OpenAI, Google’s Wiz find ancient holes, panicking the internet",
+          "url": "https://techcrunch.com/2026/10/21/php-armageddon-openai-googles-wiz-find-ancient-holes-panicking-the-internet/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Wed, 21 Oct 2026 17:59:12 +0000"
+        }
+      ]
     }
   ]
 }
