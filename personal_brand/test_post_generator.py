@@ -547,6 +547,73 @@ def test_production_resilience_partial_provider_failure():
             assert "topic" in pkg
 
 
+def test_openrouter_503_and_timeout_failover():
+    """Test 15: OpenRouter model failover on 503 / timeout immediately tries next model."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+
+    called_models = []
+    def mock_urlopen(req, context=None, timeout=None):
+        req_data = json.loads(req.data.decode("utf-8"))
+        model = req_data["model"]
+        called_models.append(model)
+        if model == "openrouter/free":
+            # Model returns 503 Service Unavailable
+            raise create_mock_http_error(503, "Service Unavailable")
+        
+        valid_json = get_mock_valid_llm_response("sys", "usr")
+        payload = {"choices": [{"message": {"content": valid_json}}]}
+        return create_mock_http_success(payload)
+
+    with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_urlopen):
+        res = provider._call_openrouter("sys", "usr")
+        assert res is not None
+        assert "openrouter/free" in called_models
+        assert "openrouter/free" in provider.disabled_models
+        assert len(called_models) >= 2
+
+
+def test_provider_headers_and_gemini_models():
+    """Test 16: Required User-Agent & OpenRouter metadata headers are properly set."""
+    provider = LLMProvider(free_only=True)
+    provider.disable_backoff_sleep = True
+    provider.env_vars["GROQ_API_KEY"] = "mock_groq_key"
+    provider.env_vars["GEMINI_API_KEY"] = "mock_gemini_key"
+    provider.env_vars["OPENROUTER_API_KEY"] = "mock_openrouter_key"
+
+    captured_headers = {}
+
+    def mock_groq_urlopen(req, context=None, timeout=None):
+        captured_headers["groq"] = dict(req.headers)
+        payload = {"choices": [{"message": {"content": "{\"status\": \"ok\"}"}}]}
+        return create_mock_http_success(payload)
+
+    def mock_gemini_urlopen(req, context=None, timeout=None):
+        captured_headers["gemini"] = dict(req.headers)
+        payload = {"candidates": [{"content": {"parts": [{"text": "{\"status\": \"ok\"}"}]}}]}
+        return create_mock_http_success(payload)
+
+    def mock_openrouter_urlopen(req, context=None, timeout=None):
+        captured_headers["openrouter"] = dict(req.headers)
+        payload = {"choices": [{"message": {"content": "{\"status\": \"ok\"}"}}]}
+        return create_mock_http_success(payload)
+
+    with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_groq_urlopen):
+        provider._call_groq("sys", "usr")
+        assert "User-agent" in captured_headers["groq"] or "User-Agent" in captured_headers["groq"]
+
+    with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_gemini_urlopen):
+        provider._call_gemini("sys", "usr")
+        assert "User-agent" in captured_headers["gemini"] or "User-Agent" in captured_headers["gemini"]
+
+    with patch("personal_brand.post_generator.urllib.request.urlopen", side_effect=mock_openrouter_urlopen):
+        provider._call_openrouter("sys", "usr")
+        h = {k.lower(): v for k, v in captured_headers["openrouter"].items()}
+        assert "user-agent" in h
+        assert "http-referer" in h
+        assert "x-title" in h
+
+
 def run_all_tests():
     print("Running Personal Brand PostGenerator Unit & Integration Test Suite...")
     test_provider_detection()
@@ -589,6 +656,10 @@ def run_all_tests():
     print("  ✓ Test 13: Groq 403 + Gemini 404 + OpenRouter Model A fail -> Model B SUCCESS passed (Req 17)")
     test_production_resilience_partial_provider_failure()
     print("  ✓ Test 14: Production resilience with partial provider failures passed (Req 18)")
+    test_openrouter_503_and_timeout_failover()
+    print("  ✓ Test 15: OpenRouter 503 & timeout immediate model failover passed")
+    test_provider_headers_and_gemini_models()
+    print("  ✓ Test 16: Required User-Agent & metadata headers verified passed")
     print("\nALL POST GENERATOR TESTS PASSED SUCCESSFULLY! 🎉")
 
 

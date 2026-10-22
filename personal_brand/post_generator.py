@@ -44,13 +44,23 @@ BANNED_SLOP = [
 FREE_MODELS: Dict[str, List[str]] = {
     "openrouter": [
         "openrouter/free",
-        "google/gemma-4-31b-it:free",
-        "google/gemma-4-26b-a4b-it:free",
         "liquid/lfm-2.5-2.6b:free",
         "nvidia/nemotron-3.5-lightning:free",
+        "google/gemma-4-31b-it:free",
+        "google/gemma-4-26b-a4b-it:free",
     ],
-    "groq": ["llama-3.3-70b-versatile", "llama3-8b-8192", "llama-3.1-8b-instant"],
-    "gemini": ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"],
+    "groq": [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
+        "llama-3.3-70b-versatile"
+    ],
+    "gemini": [
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.8-flash",
+        "gemini-3.7-flash"
+    ],
     "anthropic": []  # Anthropic is paid-only, blocked in free_only mode
 }
 
@@ -359,7 +369,10 @@ class LLMProvider:
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "PersonalBrandPipeline/1.0",
+            "HTTP-Referer": "https://github.com/lakshyagg005/daily-linkedin-posts-pipeline",
+            "X-Title": "Personal Brand Content Pipeline"
         }
 
         # Candidate free models resolution
@@ -397,7 +410,7 @@ class LLMProvider:
 
                 def _do_request():
                     req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-                    with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
+                    with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as res:
                         resp = json.loads(res.read().decode("utf-8"))
                         if resp and "choices" in resp and len(resp["choices"]) > 0:
                             msg = resp["choices"][0].get("message", {})
@@ -415,13 +428,19 @@ class LLMProvider:
                     if http_err.code in (401, 403):
                         self.mark_provider_disabled("openrouter", f"UNAVAILABLE (HTTP {http_err.code})")
                         raise RuntimeError(f"OpenRouter authentication failed: HTTP {http_err.code}")
-                    elif http_err.code == 404:
+                    elif http_err.code in (404, 502, 503, 504):
+                        # Transiently unavailable or dead model: disable this model and try next model
                         self.disabled_models.add(m)
-                        break  # Move to next model
+                        break
                     elif http_err.code == 400 and use_json_format:
                         continue  # Try without json_object response_format
                     else:
+                        self.disabled_models.add(m)
                         break
+                except (socket.timeout, TimeoutError) as to_err:
+                    last_err = to_err
+                    self.disabled_models.add(m)
+                    break
                 except Exception as e:
                     last_err = e
                     continue
@@ -442,7 +461,8 @@ class LLMProvider:
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "PersonalBrandPipeline/1.0"
         }
         models = [m for m in FREE_MODELS["groq"] if m not in self.disabled_models]
         last_err = None
@@ -460,7 +480,7 @@ class LLMProvider:
 
             def _do_request():
                 req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-                with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
+                with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as res:
                     resp = json.loads(res.read().decode("utf-8"))
                     if resp and "choices" in resp and len(resp["choices"]) > 0:
                         return resp["choices"][0]["message"]["content"]
@@ -475,9 +495,13 @@ class LLMProvider:
                 if http_err.code in (401, 403):
                     self.mark_provider_disabled("groq", f"UNAVAILABLE (HTTP {http_err.code})")
                     raise RuntimeError(f"Groq API returned HTTP {http_err.code}")
-                elif http_err.code == 404:
+                elif http_err.code in (404, 502, 503, 504):
                     self.disabled_models.add(m)
                     continue
+            except (socket.timeout, TimeoutError) as to_err:
+                last_err = to_err
+                self.disabled_models.add(m)
+                continue
             except Exception as e:
                 last_err = e
                 continue
@@ -500,7 +524,10 @@ class LLMProvider:
 
         for m in models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            headers = {"Content-Type": "application/json"}
+            headers = {
+                "Content-Type": "application/json",
+                "User-Agent": "PersonalBrandPipeline/1.0"
+            }
             payload = {
                 "contents": [{
                     "parts": [{"text": f"{system_prompt}\n\nUSER REQUEST:\n{user_prompt}"}]
@@ -510,7 +537,7 @@ class LLMProvider:
 
             def _do_request():
                 req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-                with urllib.request.urlopen(req, context=SSL_CTX, timeout=45) as res:
+                with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as res:
                     resp = json.loads(res.read().decode("utf-8"))
                     if resp and "candidates" in resp and len(resp["candidates"]) > 0:
                         return resp["candidates"][0]["content"]["parts"][0]["text"]
@@ -525,9 +552,13 @@ class LLMProvider:
                 if http_err.code in (401, 403):
                     self.mark_provider_disabled("gemini", f"UNAVAILABLE (HTTP {http_err.code})")
                     raise RuntimeError(f"Gemini API returned HTTP {http_err.code}")
-                elif http_err.code == 404:
+                elif http_err.code in (404, 502, 503, 504):
                     self.disabled_models.add(m)
                     continue
+            except (socket.timeout, TimeoutError) as to_err:
+                last_err = to_err
+                self.disabled_models.add(m)
+                continue
             except Exception as e:
                 last_err = e
                 continue
