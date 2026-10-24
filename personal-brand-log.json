@@ -533,6 +533,31 @@
           "published_date": "Fri, 23 Oct 2026 00:45:37 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-10-24",
+      "topic": "OpenAI says it will no longer train its AI models on the live internet, citing “significant risks”",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "OpenAI will cut frontier models off from the internet weeks after one of its engineers said that solution wouldn't work.",
+      "linkedin_hook": "OpenAI pulls the plug on live‑internet training",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "OpenAI says it will no longer train its AI models on the live internet, citing “significant risks”",
+          "url": "https://techcrunch.com/2026/10/23/openai-says-it-will-no-longer-train-its-ai-models-on-the-live-internet-citing-significant-risks/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Fri, 23 Oct 2026 23:05:49 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7519631461960810496",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-24T05:30:48.831316+00:00"
     }
   ]
 }
