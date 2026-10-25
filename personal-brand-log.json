@@ -603,6 +603,26 @@
       "linkedin_post_type": "document_carousel",
       "carousel_status": "published",
       "linkedin_published_at": "2026-10-25T05:24:27.413862+00:00"
+    },
+    {
+      "date": "2026-10-25",
+      "topic": "Forced to pick, Grok’s AI model chooses Republicans. OpenAI’s picks Democrats.",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "A new study found Grok's AI overwhelmingly recommends Republican candidates while OpenAI's GPT favors Democrats, with the two AI models disagreeing in more than 90% of nearly 500 election races.",
+      "linkedin_hook": "AI models pick sides",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Forced to pick, Grok’s AI model chooses Republicans. OpenAI’s picks Democrats.",
+          "url": "https://techcrunch.com/2026/10/24/forced-to-pick-groks-ai-model-chooses-republicans-openais-picks-democrats/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Sat, 24 Oct 2026 15:00:00 +0000"
+        }
+      ]
     }
   ]
 }
