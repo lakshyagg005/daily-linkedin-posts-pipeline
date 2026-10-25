@@ -578,6 +578,31 @@
           "published_date": "Fri, 23 Oct 2026 21:59:19 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-10-25",
+      "topic": "Block’s new voice model sounds eerily human",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Block said that the voice model can run locally on a MacBook M4 Max",
+      "linkedin_hook": "Voice AI goes offline",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Block’s new voice model sounds eerily human",
+          "url": "https://techcrunch.com/2026/10/24/blocks-new-voice-model-sounds-eerily-human/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Sat, 24 Oct 2026 16:00:00 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7519992250035269632",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-25T05:24:27.413862+00:00"
     }
   ]
 }
