@@ -668,6 +668,31 @@
           "published_date": "Sun, 25 Oct 2026 16:57:32 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-10-27",
+      "topic": "How OpenAI turned its coding tools into dots, an always-on personal assistant",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Alexander Embiricos, the OpenAI executive responsible for dots, never wants to have a meeting with someone else's AI agent.",
+      "linkedin_hook": "When your code editor talks back…",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "How OpenAI turned its coding tools into dots, an always-on personal assistant",
+          "url": "https://techcrunch.com/2026/10/26/how-openai-turned-its-coding-tools-into-dots-an-always-on-personal-assistant/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Tue, 27 Oct 2026 02:00:00 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7520770406937690112",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-27T08:56:34.450248+00:00"
     }
   ]
 }
