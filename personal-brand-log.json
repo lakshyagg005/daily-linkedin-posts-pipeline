@@ -713,6 +713,31 @@
           "published_date": "Tue, 27 Oct 2026 01:12:21 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-10-28",
+      "topic": "VCs will make billions on Anthropic’s IPO, but Amazon is set to make much (much) more",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Massive note conversions reveal the true extent of Amazon's ownership in Anthropic.",
+      "linkedin_hook": "Why Amazon’s bet matters more than the IPO hype",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "VCs will make billions on Anthropic’s IPO, but Amazon is set to make much (much) more",
+          "url": "https://techcrunch.com/2026/10/27/vcs-will-make-billions-on-anthropics-ipo-but-amazon-is-set-to-make-much-much-more/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Wed, 28 Oct 2026 01:15:28 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7521062845149519872",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-28T04:18:37.113314+00:00"
     }
   ]
 }
