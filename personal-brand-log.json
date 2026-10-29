@@ -758,6 +758,31 @@
           "published_date": "Tue, 27 Oct 2026 23:34:27 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-10-29",
+      "topic": "Anthropic just launched tools to show companies what their AI spending is buying",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "The frontier lab is lifting the curtain on how users spend money on its models ahead of a planned IPO.",
+      "linkedin_hook": "Anthropic just opened the books on AI spend.",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Anthropic just launched tools to show companies what their AI spending is buying",
+          "url": "https://techcrunch.com/2026/10/28/anthropic-just-launched-tools-to-show-companies-what-their-ai-spending-is-buying/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Wed, 28 Oct 2026 19:19:58 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7521472152760446976",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-29T07:25:03.696740+00:00"
     }
   ]
 }
