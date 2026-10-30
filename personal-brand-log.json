@@ -803,6 +803,31 @@
           "published_date": "Wed, 28 Oct 2026 19:05:46 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-10-30",
+      "topic": "You don’t need to believe in a god to get a religious exemption from using AI at work",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "David Durman, a University of Kentucky administrator, recently earned a religious exemption from using AI in the workplace.",
+      "linkedin_hook": "When faith meets code",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "You don’t need to believe in a god to get a religious exemption from using AI at work",
+          "url": "https://techcrunch.com/2026/10/29/you-dont-need-to-believe-in-a-god-to-get-a-religious-exemption-from-using-ai-at-work/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Fri, 30 Oct 2026 01:20:48 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7521839571702120448",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-10-30T07:45:03.123352+00:00"
     }
   ]
 }
