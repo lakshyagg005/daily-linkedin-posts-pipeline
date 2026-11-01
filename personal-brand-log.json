@@ -918,6 +918,26 @@
       "linkedin_post_type": "document_carousel",
       "carousel_status": "published",
       "linkedin_published_at": "2026-11-01T04:48:59.603301+00:00"
+    },
+    {
+      "date": "2026-11-01",
+      "topic": "Judge allows NAACP lawsuit over xAI data center pollution to move forward",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "An NAACP lawsuit accuses the SpaceX-owned AI company of violating the Clean Air Act.",
+      "linkedin_hook": "When compliance becomes code",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Judge allows NAACP lawsuit over xAI data center pollution to move forward",
+          "url": "https://techcrunch.com/2026/10/31/judge-allows-naacp-lawsuit-over-xai-data-center-pollution-to-move-forward/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Sat, 31 Oct 2026 21:17:03 +0000"
+        }
+      ]
     }
   ]
 }
