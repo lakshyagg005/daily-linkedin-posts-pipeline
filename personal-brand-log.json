@@ -938,6 +938,26 @@
           "published_date": "Sat, 31 Oct 2026 21:17:03 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-02",
+      "topic": "OpenAI might rebrand its data centers as ‘AI compute campuses’",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Data centers are deeply unpopular. But what if we called them something else?",
+      "linkedin_hook": "Rename the machines",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "OpenAI might rebrand its data centers as ‘AI compute campuses’",
+          "url": "https://techcrunch.com/2026/11/01/openai-might-rebrand-its-data-centers-as-ai-compute-campuses/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Sun, 01 Nov 2026 21:55:23 +0000"
+        }
+      ]
     }
   ]
 }
