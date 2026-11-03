@@ -958,6 +958,26 @@
           "published_date": "Sun, 01 Nov 2026 21:55:23 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-03",
+      "topic": "Apple Watch’s AI features for rewinding and recapping conversations begin beta testing",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Now in beta: Apple's new Audio Intelligence features can help you remember what someone said or take notes on conversations.",
+      "linkedin_hook": "Missed a point? Your watch can now rewind it.",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Apple Watch’s AI features for rewinding and recapping conversations begin beta testing",
+          "url": "https://techcrunch.com/2026/11/02/apple-watchs-ai-features-for-rewinding-and-recapping-conversations-begin-beta-testing/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Tue, 03 Nov 2026 07:20:00 +0000"
+        }
+      ]
     }
   ]
 }
