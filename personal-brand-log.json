@@ -978,6 +978,26 @@
           "published_date": "Tue, 03 Nov 2026 07:20:00 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-04",
+      "topic": "Anthropic is working on a system to prove AI models’ identity",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Called FlashProve, the system would let anyone check that an AI response really came from the model it claims to be from.",
+      "linkedin_hook": "Who actually generated that output?",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Anthropic is working on a system to prove AI models’ identity",
+          "url": "https://techcrunch.com/2026/11/03/anthropic-is-working-on-a-system-to-prove-ai-models-identity/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Tue, 03 Nov 2026 22:41:03 +0000"
+        }
+      ]
     }
   ]
 }
