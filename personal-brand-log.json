@@ -1023,6 +1023,26 @@
           "published_date": "Tue, 03 Nov 2026 22:19:53 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-05",
+      "topic": "Agility is the first pure humanoid robot company on the stock market. Are you buying?",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Agility arrives on the Nasdaq today as the first publicly-traded pure-play humanoid robotics company.",
+      "linkedin_hook": "Humanoid robotics is now a stock",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Agility is the first pure humanoid robot company on the stock market. Are you buying?",
+          "url": "https://techcrunch.com/2026/11/05/agility-is-the-first-pure-humanoid-robot-company-on-the-stock-market-are-you-buying/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Thu, 05 Nov 2026 12:00:00 +0000"
+        }
+      ]
     }
   ]
 }
