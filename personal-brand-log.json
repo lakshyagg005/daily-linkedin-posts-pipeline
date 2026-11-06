@@ -1043,6 +1043,51 @@
           "published_date": "Thu, 05 Nov 2026 12:00:00 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-06",
+      "topic": "Airbnb says it’s launching an AI travel agent in the first half of 2027",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Airbnb says its upcoming AI agent will help travelers plan trips, compare options, manage bookings, and get assistance throughout their stay.",
+      "linkedin_hook": "AI Travel Agent Launch",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Airbnb says it’s launching an AI travel agent in the first half of 2027",
+          "url": "https://techcrunch.com/2026/11/05/airbnb-says-its-launching-an-ai-travel-agent-in-the-first-half-of-2027/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Thu, 05 Nov 2026 22:40:55 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7524362320765116416",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-11-06T06:49:33.449698+00:00"
+    },
+    {
+      "date": "2026-11-06",
+      "topic": "Meta warns that election backlash against data centers could make AI expansion harder",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Meta warns that growing political opposition to data centers could threaten future AI investments, as communities push back against massive infrastructure projects.",
+      "linkedin_hook": "When politics meets silicon",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Meta warns that election backlash against data centers could make AI expansion harder",
+          "url": "https://techcrunch.com/2026/11/05/metas-warns-that-election-backlash-against-data-centers-could-make-ai-expansion-harder/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Thu, 05 Nov 2026 19:12:39 +0000"
+        }
+      ]
     }
   ]
 }
