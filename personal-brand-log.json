@@ -1108,6 +1108,26 @@
           "published_date": "Thu, 05 Nov 2026 19:06:12 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-07",
+      "topic": "Crusoe sells troubled Wyoming data center project to Google",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "The deal highlights the challenges of developing massive AI data centers.",
+      "linkedin_hook": "When AI infrastructure stalls, the giants step in",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Crusoe sells troubled Wyoming data center project to Google",
+          "url": "https://techcrunch.com/2026/11/06/crusoe-sells-troubled-wyoming-data-center-project-to-google/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Sat, 07 Nov 2026 01:40:28 +0000"
+        }
+      ]
     }
   ]
 }
