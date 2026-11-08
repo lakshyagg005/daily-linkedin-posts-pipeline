@@ -1128,6 +1128,26 @@
           "published_date": "Sat, 07 Nov 2026 01:40:28 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-08",
+      "topic": "Megaspeed exec was recruited to spy on Nvidia CEO, according to US intelligence memo",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "A memo circulated earlier this year reportedly claimed that China’s Ministry of State Security recruited a female technology executive to spy on Nvidia's CEO.",
+      "linkedin_hook": "When espionage meets AI hardware",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Megaspeed exec was recruited to spy on Nvidia CEO, according to US intelligence memo",
+          "url": "https://techcrunch.com/2026/11/07/chinese-exec-was-recruited-to-spy-on-nvidia-ceo-according-to-us-intelligence-memo/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Sat, 07 Nov 2026 21:17:08 +0000"
+        }
+      ]
     }
   ]
 }
