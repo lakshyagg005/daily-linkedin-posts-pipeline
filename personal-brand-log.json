@@ -1238,6 +1238,26 @@
       "linkedin_post_type": "document_carousel",
       "carousel_status": "published",
       "linkedin_published_at": "2026-11-11T03:18:25.561684+00:00"
+    },
+    {
+      "date": "2026-11-11",
+      "topic": "Nvidia’s crisis has corporate governance experts reaching for the popcorn",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "The governance experts we talked to say nobody has seen anything like what's unfolding right now.",
+      "linkedin_hook": "When a $1T AI chipmaker stumbles",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Nvidia’s crisis has corporate governance experts reaching for the popcorn",
+          "url": "https://techcrunch.com/2026/11/10/nvidias-crisis-has-corporate-governance-experts-reaching-for-the-popcorn/",
+          "source_type": "gov_stat",
+          "published_date": "Wed, 11 Nov 2026 07:30:51 +0000"
+        }
+      ]
     }
   ]
 }
