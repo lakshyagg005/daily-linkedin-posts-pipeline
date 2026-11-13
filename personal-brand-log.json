@@ -2,25 +2,6 @@
   "version": 1,
   "entries": [
     {
-      "date": "2026-09-30",
-      "topic": "Cerebras Systems’ Andrew Feldman on whether AI can keep scaling at TechCrunch Disrupt 2026",
-      "angle": "Impact of this technical shift on software builders and product strategy.",
-      "thesis": "At TechCrunch Disrupt 2026, Cerebras Systems CEO and co-founder Andrew Feldman will explore the growing demand for compute, energy, and infrastructure, how Cerebras is approaching those constraints differently, and what comes next if today’s AI hardw",
-      "linkedin_hook": "Can AI Keep Scaling? The Real Constraints Matter More Than Hype",
-      "x_themes": [
-        "interesting",
-        "contrarian",
-        "builder"
-      ],
-      "sources": [
-        {
-          "title": "Cerebras Systems’ Andrew Feldman on whether AI can keep scaling at TechCrunch Disrupt 2026",
-          "url": "https://techcrunch.com/2026/09/30/cerebras-systems-andrew-feldman-on-whether-ai-can-keep-scaling-at-techcrunch-disrupt-2026/",
-          "source_type": "high_quality_journalism"
-        }
-      ]
-    },
-    {
       "date": "2026-10-02",
       "topic": "Musk’s AI chatbot Grok reportedly encouraged Trump to capture  Venezuela’s president",
       "angle": "Impact of this technical shift on software builders and product strategy.",
@@ -1284,6 +1265,26 @@
       "linkedin_post_type": "document_carousel",
       "carousel_status": "published",
       "linkedin_published_at": "2026-11-13T02:51:13.466322+00:00"
+    },
+    {
+      "date": "2026-11-13",
+      "topic": "The unfolding Jensen Huang scandal: a timeline",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Jensen Huang has resigned from Nvidia following an affair, which could have ramifications for national security as the U.S. and China race to develop the most advanced AI infrastructure.",
+      "linkedin_hook": "Why a CEO’s exit matters for every AI builder",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "The unfolding Jensen Huang scandal: a timeline",
+          "url": "https://techcrunch.com/2026/11/12/nvidia-ceo-jensen-huangs-affair-with-alleged-chinese-spy-a-timeline/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Thu, 12 Nov 2026 21:35:00 +0000"
+        }
+      ]
     }
   ]
 }
