@@ -3,25 +3,6 @@
   "entries": [
     {
       "date": "2026-09-30",
-      "topic": "Why Software Distribution Beats Building Simple AI Wrappers",
-      "angle": "Distribution and deep workflow integration form real moats, not model wrapper APIs.",
-      "thesis": "AI capabilities are commoditizing quickly; owning the user workflow and distribution is the true defensible asset.",
-      "linkedin_hook": "Why Your AI Wrapper Might Not Last",
-      "x_themes": [
-        "interesting",
-        "contrarian",
-        "builder"
-      ],
-      "sources": [
-        {
-          "title": "TechCrunch AI Analysis",
-          "url": "https://techcrunch.com/category/artificial-intelligence/",
-          "source_type": "high_quality_journalism"
-        }
-      ]
-    },
-    {
-      "date": "2026-09-30",
       "topic": "Cerebras Systems’ Andrew Feldman on whether AI can keep scaling at TechCrunch Disrupt 2026",
       "angle": "Impact of this technical shift on software builders and product strategy.",
       "thesis": "At TechCrunch Disrupt 2026, Cerebras Systems CEO and co-founder Andrew Feldman will explore the growing demand for compute, energy, and infrastructure, how Cerebras is approaching those constraints differently, and what comes next if today’s AI hardw",
@@ -1278,6 +1259,31 @@
           "published_date": "Thu, 12 Nov 2026 03:13:10 +0000"
         }
       ]
+    },
+    {
+      "date": "2026-11-13",
+      "topic": "Muse can now place calls to US businesses — if you pay",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "Muse's AI can now place outbound calls to U.S. businesses — but it's not free.",
+      "linkedin_hook": "AI can now dial a business for you",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Muse can now place calls to US businesses — if you pay",
+          "url": "https://techcrunch.com/2026/11/12/muse-can-now-place-calls-to-u-s-businesses-if-you-pay/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Thu, 12 Nov 2026 22:22:28 +0000"
+        }
+      ],
+      "linkedin_published": true,
+      "linkedin_post_id": "urn:li:ugcPost:7526839056643751937",
+      "linkedin_post_type": "document_carousel",
+      "carousel_status": "published",
+      "linkedin_published_at": "2026-11-13T02:51:13.466322+00:00"
     }
   ]
 }
