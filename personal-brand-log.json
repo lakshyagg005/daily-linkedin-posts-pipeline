@@ -2,25 +2,6 @@
   "version": 1,
   "entries": [
     {
-      "date": "2026-10-19",
-      "topic": "Disney agrees to hire the majority of Character.AI’s workforce",
-      "angle": "Impact of this technical shift on software builders and product strategy.",
-      "thesis": "The filing also says that the “vast majority” of Character.AI employees who were offered jobs at Disney accepted them. However, this is a stalking horse bid, so another company could come forward with a higher offer.",
-      "linkedin_hook": "Disney Hires Character.AI Team",
-      "x_themes": [
-        "interesting",
-        "contrarian",
-        "builder"
-      ],
-      "sources": [
-        {
-          "title": "Disney agrees to hire the majority of Character.AI’s workforce",
-          "url": "https://techcrunch.com/2026/10/18/disney-agrees-to-hire-the-majority-of-character-ais-workforce/",
-          "source_type": "high_quality_journalism"
-        }
-      ]
-    },
-    {
       "date": "2026-10-20",
       "topic": "Mamdani says feds have abdicated on AI, urges New Yorkers to push back",
       "angle": "Impact of this technical shift on software builders and product strategy.",
@@ -1281,6 +1262,26 @@
           "url": "https://techcrunch.com/2026/11/25/amazon-and-meta-reportedly-in-talks-to-lift-blockade-on-ai-agent-muse/",
           "source_type": "high_quality_journalism",
           "published_date": "Wed, 25 Nov 2026 14:10:18 +0000"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-26",
+      "topic": "S&P considers Nvidia credit downgrade over governance and ‘key man’ risks",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "The credit rating agency may lower Nvidia's credit rating to AA-, the fourth-highest rating.",
+      "linkedin_hook": "Nvidia’s Credit Rating at Risk",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "S&P considers Nvidia credit downgrade over governance and ‘key man’ risks",
+          "url": "https://techcrunch.com/2026/11/25/sp-considers-nvidia-credit-downgrade-over-governance-and-key-man-risks/",
+          "source_type": "gov_stat",
+          "published_date": "Wed, 25 Nov 2026 22:44:32 +0000"
         }
       ]
     }
