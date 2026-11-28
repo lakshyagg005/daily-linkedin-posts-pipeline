@@ -3,25 +3,6 @@
   "entries": [
     {
       "date": "2026-10-20",
-      "topic": "Nscale and Anthropic are reportedly in talks for yet another $45B compute deal",
-      "angle": "Impact of this technical shift on software builders and product strategy.",
-      "thesis": "If the deal goes through, it would be the latest in a long string of giant compute deals Anthropic has struck over the past year.",
-      "linkedin_hook": "The $45B Compute Question",
-      "x_themes": [
-        "interesting",
-        "contrarian",
-        "builder"
-      ],
-      "sources": [
-        {
-          "title": "Nscale and Anthropic are reportedly in talks for yet another $45B compute deal",
-          "url": "https://techcrunch.com/2026/10/19/nscale-and-anthropic-are-reportedly-in-talks-for-yet-another-45-billion-compute-deal/",
-          "source_type": "high_quality_journalism"
-        }
-      ]
-    },
-    {
-      "date": "2026-10-20",
       "topic": "Embedded AI evaluators won’t be an easy solution, Hugging Face’s policy chief says",
       "angle": "Impact of this technical shift on software builders and product strategy.",
       "thesis": "The idea of embedded evaluators — in which supposedly \"neutral\" third-party observers are placed inside AI organizations — has been popularized over the last several months, as AI labs grapple with a rash of safety incidents that have spurred concern",
@@ -1278,6 +1259,26 @@
           "url": "https://techcrunch.com/2026/11/26/nvidia-hits-pause-on-chip-shipments-to-southeast-asia/",
           "source_type": "high_quality_journalism",
           "published_date": "Thu, 26 Nov 2026 20:03:54 +0000"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-28",
+      "topic": "Grand Theft Auto VI proves why efficiency isn’t a virtue",
+      "angle": "Impact of this technical shift on software builders, engineers, and product strategy.",
+      "thesis": "On the same day that Anthropic entered the public market, a painstakingly human video game became one of most successful entertainment launches of all time.",
+      "linkedin_hook": "When speed isn’t the star",
+      "x_themes": [
+        "interesting",
+        "contrarian",
+        "builder"
+      ],
+      "sources": [
+        {
+          "title": "Grand Theft Auto VI proves why efficiency isn’t a virtue",
+          "url": "https://techcrunch.com/2026/11/26/as-anthropic-ipos-grand-theft-auto-vi-proves-why-efficiency-isnt-a-virtue/",
+          "source_type": "high_quality_journalism",
+          "published_date": "Thu, 26 Nov 2026 16:00:00 +0000"
         }
       ]
     }
